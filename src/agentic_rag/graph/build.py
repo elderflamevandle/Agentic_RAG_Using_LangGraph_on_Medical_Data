@@ -1,80 +1,151 @@
+"""LangGraph workflow assembly for the agentic RAG pipeline.
+
+Call ``build_agent(settings)`` to get a compiled, ready-to-invoke graph.
+
+Workflow topology
+-----------------
+::
+
+    START
+      │
+      ▼
+    router  ──────────────────────────────────────────────┐
+      │ (conditional on state["route"])                   │
+      ├─► retrieve_qna                                    │
+      ├─► retrieve_device                                 │
+      └─► web_search ◄──── (relevance retry loop) ────────┘
+              │
+              ▼
+        relevance_checker
+              │ (conditional on is_relevant + iteration_count)
+              ├─► [Yes]  augment ──► generate ──► END
+              └─► [No]   web_search  (up to MAX_ITERATIONS)
+"""
 from __future__ import annotations
 
 import logging
-from langgraph.graph import StateGraph, START, END
+
+from langgraph.graph import END, START, StateGraph
 
 from ..config import Settings
 from ..llm import build_llm
 from ..tools.web_search import build_serper
 from ..vectorstore.chroma_store import ChromaStore
-from .state import GraphState
 from .nodes import (
-    router_node,
-    retrieve_qna_node,
-    retrieve_device_node,
-    web_search_node,
-    relevance_checker_node,
     build_prompt_node,
     generate_node,
+    relevance_checker_node,
+    retrieve_device_node,
+    retrieve_qna_node,
+    router_node,
+    web_search_node,
 )
+from .state import GraphState
 
 logger = logging.getLogger(__name__)
 
+# Node name constants — single source of truth referenced by add_node and edges.
+_ROUTER = "router"
+_RETRIEVE_QNA = "retrieve_qna"
+_RETRIEVE_DEVICE = "retrieve_device"
+_WEB_SEARCH = "web_search"
+_RELEVANCE_CHECKER = "relevance_checker"
+_AUGMENT = "augment"
+_GENERATE = "generate"
+
 
 def build_agent(settings: Settings):
-    """Build and compile the LangGraph agentic RAG workflow."""
+    """Build and compile the agentic RAG LangGraph workflow.
+
+    Steps
+    -----
+    1. Instantiate shared dependencies (LLM, ChromaStore, Serper search).
+    2. Register all seven nodes on a ``StateGraph``.
+    3. Wire conditional and unconditional edges.
+    4. Compile and return the runnable graph.
+
+    Parameters
+    ----------
+    settings:
+        Fully-populated ``Settings`` instance (from ``get_settings()``).
+
+    Returns
+    -------
+    CompiledGraph
+        A LangGraph compiled graph ready for ``.invoke({"query": "..."})`` calls.
+    """
+    logger.info("Building agentic RAG agent | model=%s", settings.GROQ_MODEL)
+
+    # --- Shared dependencies ---
     llm = build_llm(settings)
     store = ChromaStore(settings.CHROMA_PATH)
     collections = store.ensure_collections(settings.QNA_COLLECTION, settings.DEVICE_COLLECTION)
-    search_tool = build_serper()
+    search_tool = build_serper(serper_api_key=settings.SERPER_API_KEY)
 
+    # --- Graph construction ---
     workflow = StateGraph(GraphState)
 
-    workflow.add_node("Router", router_node(llm))
-    workflow.add_node("Retrieve_QnA", retrieve_qna_node(collections, settings))
-    workflow.add_node("Retrieve_Device", retrieve_device_node(collections, settings))
-    workflow.add_node("Web_Search", web_search_node(search_tool))
-    workflow.add_node("Relevance_Checker", relevance_checker_node(llm))
-    workflow.add_node("Augment", build_prompt_node(settings))
-    workflow.add_node("Generate", generate_node(llm))
+    workflow.add_node(_ROUTER, router_node(llm))
+    workflow.add_node(_RETRIEVE_QNA, retrieve_qna_node(collections, settings))
+    workflow.add_node(_RETRIEVE_DEVICE, retrieve_device_node(collections, settings))
+    workflow.add_node(_WEB_SEARCH, web_search_node(search_tool))
+    workflow.add_node(_RELEVANCE_CHECKER, relevance_checker_node(llm))
+    workflow.add_node(_AUGMENT, build_prompt_node(settings))
+    workflow.add_node(_GENERATE, generate_node(llm))
 
-    # Edges
-    workflow.add_edge(START, "Router")
+    # --- Entry edge ---
+    workflow.add_edge(START, _ROUTER)
 
-    def _route(state: GraphState) -> str:
-        return state["route"]
+    # --- Router → retriever (conditional on state["route"]) ---
+    def _pick_retriever(state: GraphState) -> str:
+        """Return the node name that matches the router's decision."""
+        return state["route"]  # values are the same as node name constants above
 
     workflow.add_conditional_edges(
-        "Router",
-        _route,
+        _ROUTER,
+        _pick_retriever,
         {
-            "Retrieve_QnA": "Retrieve_QnA",
-            "Retrieve_Device": "Retrieve_Device",
-            "Web_Search": "Web_Search",
+            _RETRIEVE_QNA: _RETRIEVE_QNA,
+            _RETRIEVE_DEVICE: _RETRIEVE_DEVICE,
+            _WEB_SEARCH: _WEB_SEARCH,
         },
     )
 
-    for n in ("Retrieve_QnA", "Retrieve_Device", "Web_Search"):
-        workflow.add_edge(n, "Relevance_Checker")
+    # --- All retrievers feed into the relevance checker ---
+    for retriever in (_RETRIEVE_QNA, _RETRIEVE_DEVICE, _WEB_SEARCH):
+        workflow.add_edge(retriever, _RELEVANCE_CHECKER)
 
-    def _relevance_decision(state: GraphState) -> str:
+    # --- Relevance checker → augment or retry web_search ---
+    def _relevance_routing(state: GraphState) -> str:
+        """Increment the iteration counter and decide the next node.
+
+        If ``MAX_ITERATIONS`` is reached the relevance verdict is
+        overridden to ``"Yes"`` so the pipeline always terminates.
+        """
         iteration = state.get("iteration_count", 0) + 1
         state["iteration_count"] = iteration
+
         if iteration >= settings.MAX_ITERATIONS:
-            logger.warning("Max iterations reached (%d). Forcing relevance=Yes.", iteration)
+            logger.warning(
+                "MAX_ITERATIONS (%d) reached. Forcing answer generation.", settings.MAX_ITERATIONS
+            )
             state["is_relevant"] = "Yes"
+
         return state.get("is_relevant", "Yes")
 
     workflow.add_conditional_edges(
-        "Relevance_Checker",
-        _relevance_decision,
+        _RELEVANCE_CHECKER,
+        _relevance_routing,
         {
-            "Yes": "Augment",
-            "No": "Web_Search",
+            "Yes": _AUGMENT,
+            "No": _WEB_SEARCH,
         },
     )
 
-    workflow.add_edge("Augment", "Generate")
-    workflow.add_edge("Generate", END)
+    # --- Linear tail of the pipeline ---
+    workflow.add_edge(_AUGMENT, _GENERATE)
+    workflow.add_edge(_GENERATE, END)
 
-    return workflow.compile()
+    compiled = workflow.compile()
+    logger.info("Agent graph compiled successfully.")
+    return compiled
