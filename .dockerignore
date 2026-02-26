@@ -1,0 +1,60 @@
+# =============================================================================
+# .dockerignore — files excluded from the Docker build context
+# =============================================================================
+# Keeping the build context small speeds up "docker build" because Docker
+# only sends the listed files to the daemon.  Large/sensitive files excluded
+# here are never available inside the image, even if not explicitly COPY'd.
+
+# Secrets — NEVER bake into an image
+.env
+.env.*
+!.env.example
+
+# Version control
+.git/
+.gitignore
+
+# Python runtime artefacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Existing local vector store (will be re-created inside the container)
+chroma_db/
+chroma_db_new/
+
+# Log files (mounted as a volume at runtime)
+logs/
+*.log
+
+# Notebooks (not needed in the production image)
+notebooks/
+
+# IDE / editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# Build / packaging artefacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Test / CI artefacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/

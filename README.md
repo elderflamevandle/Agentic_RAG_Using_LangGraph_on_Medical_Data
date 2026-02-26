@@ -12,22 +12,91 @@ search — then checks relevance before generating a concise answer.
 
 ## How it works
 
+### Entry Point
+
 ```
-User query
-    │
-    ▼
- router  ──────────────────────────────────────┐
-    │  (LLM decides which source to use)        │
-    ├─► retrieve_qna     (ChromaDB — Q&A)        │
-    ├─► retrieve_device  (ChromaDB — devices)    │
-    └─► web_search       (Serper API)            │
-             │                                  │
-             ▼                                  │
-    relevance_checker                           │
-             │                                  │
-             ├─► [relevant]  augment → generate → END
-             └─► [not relevant, retry] ─────────┘
-                 (up to MAX_ITERATIONS times)
+CLI: python scripts/run_agent.py --query "..."
+        │
+        ▼
+   main()  [run_agent.py]
+        │
+        ├─ get_settings()        — loads .env via pydantic-settings
+        ├─ setup_logging()
+        ├─ build_agent(settings) — compiles the LangGraph workflow
+        └─ agent.invoke({"query": query})
+                │
+         (graph executes below)
+```
+
+### LangGraph Workflow
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        GraphState (TypedDict)                        │
+│  query · route · context · source · is_relevant · iteration_count   │
+│  prompt · response                                                   │
+└──────────────────────────────────────────────────────────────────────┘
+
+                              START
+                                │
+                                ▼
+                         ┌────────────┐
+                         │   router   │  LLM → RouteDecision schema
+                         └─────┬──────┘  (Groq structured output)
+                               │  state["route"] = one of 3 literals
+                    ┌──────────┼──────────┐
+                    ▼          ▼          ▼
+             retrieve_qna  retrieve_    web_search
+             (ChromaDB     device       (Serper API)
+              qna coll.)   (ChromaDB
+                            device coll.)
+                    │          │          │
+                    └──────────┴──────────┘
+                                │
+                                ▼
+                      ┌──────────────────┐
+                      │ relevance_checker │  LLM → RelevanceDecision schema
+                      └────────┬─────────┘  → state["is_relevant"] = "Yes"/"No"
+                               │
+              ┌────────────────┴────────────────┐
+              │  is_relevant == "No"             │  is_relevant == "Yes"
+              │  AND iteration < MAX_ITERATIONS  │  (OR MAX_ITERATIONS hit)
+              ▼                                  ▼
+         web_search ◄──── retry loop ────   ┌─────────┐
+              │                             │ augment │  builds RAG prompt
+              └──► relevance_checker        └────┬────┘
+                   (loops back up)               │
+                                                 ▼
+                                          ┌──────────┐
+                                          │ generate │  LLM free-text answer
+                                          └────┬─────┘
+                                               │
+                                              END
+                                               │
+                                    state["response"] + state["source"]
+                                         printed to stdout
+```
+
+### State Mutations Per Node
+
+```
+router            → sets: route, source
+retrieve_qna      → sets: context, source
+retrieve_device   → sets: context, source
+web_search        → sets: context, source
+relevance_checker → sets: is_relevant
+augment           → sets: prompt
+generate          → sets: response
+```
+
+### Retry Loop Guard
+
+```
+relevance_checker → "No" → web_search (repeat)
+                         ↑
+                iteration_count++
+                if iteration_count >= MAX_ITERATIONS:
+                    force is_relevant = "Yes"  → breaks the loop
 ```
 
 ---
