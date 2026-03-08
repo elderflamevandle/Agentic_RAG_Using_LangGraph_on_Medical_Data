@@ -10,7 +10,11 @@ pydantic-settings==2.7.1
 # LLM & orchestration
 langchain-groq==0.2.3
 langchain-community==0.3.20
-langgraph==0.2.73
+langchain-core==0.3.45
+langgraph==0.3.5
 
 # Vector store
 chromadb==0.6.3
+
+# Web UI
+streamlit>=1.40.0

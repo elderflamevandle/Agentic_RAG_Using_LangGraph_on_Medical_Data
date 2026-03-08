@@ -49,3 +49,7 @@ class GraphState(_RequiredState, total=False):
     iteration_count: int
     prompt: str
     response: str
+    # Performance tracking — populated by the timing wrapper and generate node.
+    node_timings: dict        # {node_name: latency_ms}  written by build.py _timed()
+    prompt_tokens: int        # input  token count from Groq usage_metadata
+    completion_tokens: int    # output token count from Groq usage_metadata

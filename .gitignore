@@ -46,3 +46,6 @@ Thumbs.db
 # Local vector DB persistence
 chroma_db/
 chroma_db_new/
+
+# Claude Code
+CLAUDE.md

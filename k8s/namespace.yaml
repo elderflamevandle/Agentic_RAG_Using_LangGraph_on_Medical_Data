@@ -1,0 +1,13 @@
+# =============================================================================
+# Namespace — agentic-rag
+# =============================================================================
+# All resources for this application live in a single, isolated namespace.
+# Apply first:  kubectl apply -f k8s/namespace.yaml
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/managed-by: kubectl

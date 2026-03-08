@@ -1,0 +1,54 @@
+# =============================================================================
+# ConfigMap — non-sensitive environment variables
+# =============================================================================
+# All keys map 1-to-1 to Settings field names in src/agentic_rag/config.py.
+# Values here override the field defaults.
+#
+# CRITICAL:
+#   CHROMA_PATH must exactly match the volumeMounts.mountPath for chroma-pvc
+#   in deployment.yaml and cronjob.yaml.  A mismatch causes ChromaDB to open
+#   an ephemeral (in-memory) database and all ingested data is lost on restart.
+#
+# Replace REPLACE_WITH_YOUR_* placeholders before applying.
+# Apply:  kubectl apply -f k8s/configmap.yaml
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentic-rag-config
+  namespace: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/component: config
+data:
+  # ── LLM parameters ─────────────────────────────────────────────────────────
+  GROQ_MODEL: "llama-3.3-70b-versatile"
+  TEMPERATURE: "0.3"
+
+  # ── Vector store / ChromaDB ────────────────────────────────────────────────
+  # Must match chroma-pvc volumeMount.mountPath in deployment.yaml / cronjob.yaml
+  CHROMA_PATH: "/app/chroma_db"
+  QNA_COLLECTION: "medical_q_n_a"
+  DEVICE_COLLECTION: "medical_device_manual"
+  CHROMA_BATCH_SIZE: "256"
+
+  # ── Retrieval settings ─────────────────────────────────────────────────────
+  TOP_K: "3"
+
+  # ── Prompting / answer limits ──────────────────────────────────────────────
+  ANSWER_WORD_LIMIT: "80"
+  MAX_ITERATIONS: "3"
+
+  # ── Dataset paths — must match datasets-pvc volumeMount.mountPath ──────────
+  MEDICAL_QA_CSV: "/app/datasets/medical_QnA_Dataset.csv"
+  MEDICAL_DEVICE_CSV: "/app/datasets/medical_device_manuals_dataset.csv"
+  SAMPLE_ROWS: "0"
+
+  # ── Observability ──────────────────────────────────────────────────────────
+  LOG_LEVEL: "INFO"
+
+  # ── AWS / S3 (used by dataset-loader init container) ───────────────────────
+  # Set to the S3 bucket that holds your CSV datasets under a /datasets/ prefix.
+  S3_DATASETS_BUCKET: "REPLACE_WITH_YOUR_S3_BUCKET"
+  # AWS region where the bucket and EKS cluster reside (e.g. us-east-1).
+  AWS_DEFAULT_REGION: "REPLACE_WITH_YOUR_AWS_REGION"

@@ -1,0 +1,700 @@
+2026-03-01 04:15:24 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:15:24 | INFO     | chromadb.telemetry.product.posthog | Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2026-03-01 04:15:24 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:15:25 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:15:25 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:15:25 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:15:25 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.3 top_k=3 max_iter=3 word_limit=80
+2026-03-01 04:15:32 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=gemma2-9b-it
+2026-03-01 04:15:32 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:15:32 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:15:32 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:15:32 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:15:32 | INFO     | __main__ | Agent built | model=gemma2-9b-it temp=0.3 top_k=3 max_iter=3 word_limit=80
+2026-03-01 04:15:44 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:15:44 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:15:44 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='what is arrythmia in heart diseases ?'
+2026-03-01 04:15:45 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='what is arrythmia in heart diseases ?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=what+is+arrythmia+in+heart+diseases+%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='what is arrythmia in heart diseases ?'
+During task with name 'web_search' and id '49de2910-8c64-d46d-76fc-528a267c2d07'
+2026-03-01 04:18:04 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:18:04 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:18:04 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='give me info on medical devices'
+2026-03-01 04:18:12 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='give me info on medical devices'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=give+me+info+on+medical+devices&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='give me info on medical devices'
+During task with name 'web_search' and id '44e245db-5892-f3c9-fc47-b120c18ce4b5'
+2026-03-01 04:18:23 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:18:23 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:18:23 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='what is heart ?'
+2026-03-01 04:18:23 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='what is heart ?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=what+is+heart+%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='what is heart ?'
+During task with name 'web_search' and id '5e014afa-ce70-ec63-045d-5a45b6a99193'
+2026-03-01 04:18:44 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:18:44 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:18:44 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='what is head ?'
+2026-03-01 04:18:44 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='what is head ?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=what+is+head+%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='what is head ?'
+During task with name 'web_search' and id '85635ca5-b83d-5b3c-a97b-9fbf531e9c77'
+2026-03-01 04:19:42 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:19:42 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:19:42 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='What are the treatments for Kawasaki disease?'
+2026-03-01 04:19:42 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='What are the treatments for Kawasaki disease?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=What+are+the+treatments+for+Kawasaki+disease%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='What are the treatments for Kawasaki disease?'
+During task with name 'web_search' and id 'f3fc72f1-0a67-899d-617c-1f5a05940588'
+2026-03-01 04:19:50 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:19:50 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:50 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:50 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:50 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:19:50 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.3 top_k=5 max_iter=3 word_limit=80
+2026-03-01 04:19:52 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:19:52 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:52 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:52 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:52 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:19:52 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.9 top_k=5 max_iter=3 word_limit=80
+2026-03-01 04:19:56 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:19:56 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:56 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:56 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:56 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:19:56 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.7 top_k=5 max_iter=3 word_limit=80
+2026-03-01 04:19:57 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:19:57 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:57 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:57 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:19:57 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:19:57 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.5 top_k=5 max_iter=3 word_limit=80
+2026-03-01 04:20:02 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:20:02 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:20:02 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='What are the treatments for Kawasaki disease?'
+2026-03-01 04:20:03 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='What are the treatments for Kawasaki disease?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=What+are+the+treatments+for+Kawasaki+disease%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='What are the treatments for Kawasaki disease?'
+During task with name 'web_search' and id '9740ba2a-0aca-f9c9-a3fd-5e8774f8cb5f'
+2026-03-01 04:20:10 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:20:10 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:20:10 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:20:10 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:20:10 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:20:10 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.5 top_k=5 max_iter=3 word_limit=90
+2026-03-01 04:20:10 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:20:10 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:20:10 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:20:10 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:20:10 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:20:10 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.5 top_k=5 max_iter=3 word_limit=120
+2026-03-01 04:29:31 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 04:29:31 | INFO     | chromadb.telemetry.product.posthog | Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2026-03-01 04:29:31 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:29:31 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:29:31 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 04:29:31 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 04:29:31 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.3 top_k=3 max_iter=3 word_limit=80
+2026-03-01 04:30:25 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:30:25 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:30:25 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='What are contraindications for a ventilator?'
+2026-03-01 04:30:25 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='What are contraindications for a ventilator?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=What+are+contraindications+for+a+ventilator%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='What are contraindications for a ventilator?'
+During task with name 'web_search' and id 'ba606ea2-1009-b495-abf1-fa249117476e'
+2026-03-01 04:30:39 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-03-01 04:30:39 | WARNING  | agentic_rag.graph.nodes | Router structured-output failed (Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}). Falling back to web_search.
+2026-03-01 04:30:39 | INFO     | agentic_rag.graph.nodes | Router decision: web_search | query='What are the treatments for Kawasaki disease?'
+2026-03-01 04:30:39 | ERROR    | __main__ | Agent invocation failed: Serper search failed | query='What are the treatments for Kawasaki disease?'
+Traceback (most recent call last):
+  File "/app/src/agentic_rag/tools/web_search.py", line 56, in run_search
+    return search.run(query=query)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 74, in run
+    results = self._google_serper_api_results(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langchain_community/utilities/google_serper.py", line 164, in _google_serper_api_results
+    response.raise_for_status()
+  File "/usr/local/lib/python3.12/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://google.serper.dev/search?q=What+are+the+treatments+for+Kawasaki+disease%3F&gl=us&hl=en&num=10
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app.py", line 287, in main
+    response, source = _run_query(agent, query)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app.py", line 227, in _run_query
+    result = agent.invoke({"query": query})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2367, in invoke
+    for chunk in self.stream(
+                 ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/__init__.py", line 2024, in stream
+    for _ in runner.tick(
+             ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/runner.py", line 230, in tick
+    run_with_retry(
+  File "/usr/local/lib/python3.12/site-packages/langgraph/pregel/retry.py", line 40, in run_with_retry
+    return task.proc.invoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 546, in invoke
+    input = step.invoke(input, config, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/langgraph/utils/runnable.py", line 310, in invoke
+    ret = context.run(self.func, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/graph/nodes.py", line 132, in _search
+    context = run_search(search_tool, query=query)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/agentic_rag/tools/web_search.py", line 58, in run_search
+    raise SearchError(f"Serper search failed | query={query!r}") from exc
+agentic_rag.exceptions.SearchError: Serper search failed | query='What are the treatments for Kawasaki disease?'
+During task with name 'web_search' and id '51a2e885-80c6-f01d-b57b-dc720f3f70fb'
+2026-03-01 16:27:01 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 16:27:01 | INFO     | chromadb.telemetry.product.posthog | Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2026-03-01 16:27:01 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:27:01 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:27:02 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:27:02 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 16:27:02 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.3 top_k=3 max_iter=3 word_limit=80
+2026-03-01 16:31:05 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-01 16:31:05 | INFO     | agentic_rag.graph.nodes | Router decision: retrieve_qna | query='Kawasaki disease'
+2026-03-01 16:31:05 | INFO     | httpx | HTTP Request: GET https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz "HTTP/1.1 200 OK"
+2026-03-01 16:31:11 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event CollectionQueryEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16186
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16187
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16188
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16189
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16190
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16191
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16192
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16193
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16194
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16195
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16196
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16197
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16198
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16199
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16200
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16201
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16202
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16203
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16204
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16205
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16206
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16207
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16208
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16209
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16210
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16211
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16212
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16213
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16214
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16215
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16216
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16217
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16218
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16219
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16220
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16221
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16222
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16223
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16224
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16225
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16226
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16227
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16228
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16229
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16230
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16231
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16232
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16233
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16234
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16235
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16236
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16237
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16238
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16239
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16240
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16241
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16242
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16243
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16244
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16245
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16246
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16247
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16248
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16249
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16250
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16251
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16252
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16253
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16254
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16255
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16256
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16257
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16258
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16259
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16260
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16261
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16262
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16263
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16264
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16265
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16266
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16267
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16268
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16269
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16270
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16271
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16272
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16273
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16274
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16275
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16276
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16277
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16278
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16279
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16280
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16281
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16282
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16283
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16284
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16285
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16286
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16287
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16288
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16289
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16290
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16291
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16292
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16293
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16294
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16295
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16296
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16297
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16298
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16299
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16300
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16301
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16302
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16303
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16304
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16305
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16306
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16307
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16308
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16309
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16310
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16311
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16312
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16313
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16314
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16315
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16316
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16317
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16318
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16319
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16320
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16321
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16322
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16323
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16324
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16325
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16326
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16327
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16328
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16329
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16330
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16331
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16332
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16333
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16334
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16335
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16336
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16337
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16338
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16339
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16340
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16341
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16342
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16343
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16344
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16345
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16346
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16347
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16348
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16349
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16350
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16351
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16352
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16353
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16354
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16355
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16356
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16357
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16358
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16359
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16360
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16361
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16362
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16363
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16364
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16365
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16366
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16367
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16368
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16369
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16370
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16371
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16372
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16373
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16374
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16375
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16376
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16377
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16378
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16379
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16380
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16381
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16382
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16383
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16384
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16385
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16386
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16387
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16388
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16389
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16390
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16391
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16392
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16393
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16394
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16395
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16396
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16397
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16398
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16399
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16400
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16401
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16402
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16403
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16404
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16405
+2026-03-01 16:31:12 | WARNING  | chromadb.segment.impl.vector.local_persistent_hnsw | Add of existing embedding ID: qa_16406
+2026-03-01 16:31:12 | INFO     | agentic_rag.graph.nodes | Q&A retrieval complete | docs_returned=3
+2026-03-01 16:31:12 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-01 16:31:12 | INFO     | agentic_rag.graph.nodes | Relevance check: Yes | iteration=1 | source=Medical Q&A Collection
+2026-03-01 16:31:13 | INFO     | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-01 16:31:13 | INFO     | agentic_rag.graph.nodes | Answer generated | length=317 chars
+2026-03-01 16:31:13 | INFO     | __main__ | Query answered | source=Medical Q&A Collection
+2026-03-01 16:54:18 | INFO     | agentic_rag.graph.build | Building agentic RAG agent | model=llama-3.3-70b-versatile
+2026-03-01 16:54:18 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:54:18 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:54:18 | ERROR    | chromadb.telemetry.product.posthog | Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+2026-03-01 16:54:18 | INFO     | agentic_rag.graph.build | Agent graph compiled successfully.
+2026-03-01 16:54:18 | INFO     | __main__ | Agent built | model=llama-3.3-70b-versatile temp=0.5 top_k=3 max_iter=3 word_limit=80

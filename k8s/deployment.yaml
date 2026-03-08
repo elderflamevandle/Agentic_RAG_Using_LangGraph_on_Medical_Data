@@ -1,0 +1,193 @@
+# =============================================================================
+# Deployment — agentic-rag Streamlit application
+# =============================================================================
+#
+# Placeholders to replace before applying:
+#   <aws-account-id>             — your 12-digit AWS account number
+#   <region>                     — AWS region (e.g. us-east-1)
+#   configmap.yaml S3_DATASETS_BUCKET  — your S3 bucket name
+#   configmap.yaml AWS_DEFAULT_REGION  — your AWS region
+#
+# Pod startup sequence:
+#   1. init: dataset-loader  — aws s3 sync → datasets-pvc
+#   2. init: ingest          — python scripts/ingest.py (idempotent bootstrap)
+#   3. main: agentic-rag     — streamlit run app.py
+#
+# strategy: Recreate
+#   EBS (ReadWriteOnce) volumes can only attach to one node at a time.
+#   RollingUpdate would leave the new pod stuck in ContainerCreating while the
+#   old pod still holds the volume.  Recreate terminates the old pod first.
+#
+# fsGroup: 1000
+#   Kubernetes chowns all volume mounts to GID 1000 on attach, which matches
+#   the appuser (UID/GID 1000) created in the Dockerfile.
+#
+# Apply:  kubectl apply -f k8s/deployment.yaml
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-rag
+  namespace: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/component: app
+spec:
+  replicas: 1
+  # Recreate is required for ReadWriteOnce EBS volumes — see header comment.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: agentic-rag
+  template:
+    metadata:
+      labels:
+        app: agentic-rag
+        app.kubernetes.io/name: agentic-rag
+        app.kubernetes.io/component: app
+    spec:
+      # ── Pod-level security context ─────────────────────────────────────────
+      securityContext:
+        # All volume mounts are chowned to this GID on attach.
+        # Matches appuser GID=1000 in the Dockerfile.
+        fsGroup: 1000
+        runAsNonRoot: true
+
+      # ── Init containers ────────────────────────────────────────────────────
+      initContainers:
+        # ------------------------------------------------------------------
+        # 1. dataset-loader
+        #    Syncs CSV files from S3 into the datasets-pvc before the
+        #    ingest script runs.  Uses the official AWS CLI image so that
+        #    the application image stays lean.
+        #
+        #    If using IRSA, remove the envFrom secretRef block (AWS_ACCESS_KEY_ID
+        #    and AWS_SECRET_ACCESS_KEY are injected via the pod's IAM role).
+        # ------------------------------------------------------------------
+        - name: dataset-loader
+          image: amazon/aws-cli:latest
+          command:
+            - sh
+            - -c
+            - |
+              echo "Syncing datasets from s3://${S3_DATASETS_BUCKET}/datasets/ ..."
+              aws s3 sync "s3://${S3_DATASETS_BUCKET}/datasets/" /app/datasets/ \
+                --region "${AWS_DEFAULT_REGION}" \
+                --no-progress
+              echo "Sync complete. Files in /app/datasets/:"
+              ls -lh /app/datasets/
+          env:
+            - name: S3_DATASETS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: agentic-rag-config
+                  key: S3_DATASETS_BUCKET
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: agentic-rag-config
+                  key: AWS_DEFAULT_REGION
+          # AWS credentials — remove if using IRSA
+          envFrom:
+            - secretRef:
+                name: agentic-rag-secret
+          volumeMounts:
+            - name: datasets
+              mountPath: /app/datasets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+        # ------------------------------------------------------------------
+        # 2. ingest
+        #    Runs scripts/ingest.py to populate chroma-pvc with embeddings.
+        #    Idempotent: ChromaDB warns on duplicate IDs but never fails, so
+        #    re-ingesting the same CSVs is safe.
+        # ------------------------------------------------------------------
+        - name: ingest
+          image: <aws-account-id>.dkr.ecr.<region>.amazonaws.com/agentic-rag:latest
+          command: ["python", "scripts/ingest.py"]
+          envFrom:
+            - configMapRef:
+                name: agentic-rag-config
+            - secretRef:
+                name: agentic-rag-secret
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: chroma
+              mountPath: /app/chroma_db
+            - name: datasets
+              mountPath: /app/datasets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+
+      # ── Main containers ────────────────────────────────────────────────────
+      containers:
+        - name: agentic-rag
+          image: <aws-account-id>.dkr.ecr.<region>.amazonaws.com/agentic-rag:latest
+          # CMD from Dockerfile: streamlit run app.py --server.port=8501 ...
+          ports:
+            - name: streamlit
+              containerPort: 8501
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: agentic-rag-config
+            - secretRef:
+                name: agentic-rag-secret
+          securityContext:
+            runAsUser: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            # chroma-pvc path MUST match CHROMA_PATH in configmap.yaml
+            - name: chroma
+              mountPath: /app/chroma_db
+            - name: datasets
+              mountPath: /app/datasets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          # Streamlit exposes /_stcore/health for liveness / readiness checks.
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 60   # allow time for ChromaDB to open
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+      # ── Volumes ────────────────────────────────────────────────────────────
+      volumes:
+        - name: chroma
+          persistentVolumeClaim:
+            claimName: chroma-pvc
+        - name: datasets
+          persistentVolumeClaim:
+            claimName: datasets-pvc

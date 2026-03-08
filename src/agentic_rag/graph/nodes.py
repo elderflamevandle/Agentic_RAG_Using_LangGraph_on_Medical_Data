@@ -22,7 +22,7 @@ import logging
 from langchain_groq import ChatGroq
 
 from ..config import Settings
-from ..llm import invoke_text
+
 from ..tools.web_search import run_search
 from ..vectorstore.chroma_store import ChromaCollections, ChromaStore
 from .schemas import RelevanceDecision, RouteDecision
@@ -140,7 +140,7 @@ def web_search_node(search_tool):
 # Relevance checker node
 # ---------------------------------------------------------------------------
 
-def relevance_checker_node(llm: ChatGroq):
+def relevance_checker_node(llm: ChatGroq, settings: Settings):
     """Factory: return a node that judges whether context answers the query.
 
     Uses structured output (``RelevanceDecision``) for a strict Yes/No
@@ -151,12 +151,16 @@ def relevance_checker_node(llm: ChatGroq):
     ----------
     llm:
         ChatGroq instance used for relevance classification.
+    settings:
+        Runtime configuration — provides ``MAX_ITERATIONS``.
     """
     structured = llm.with_structured_output(RelevanceDecision)
 
     def _check(state: GraphState) -> GraphState:
         query = state["query"]
         context = state.get("context", "")
+        iteration = state.get("iteration_count", 0) + 1
+
         prompt = (
             "Decide strictly whether the context below is relevant to the user query.\n"
             "Respond only in the required structured schema.\n\n"
@@ -172,10 +176,17 @@ def relevance_checker_node(llm: ChatGroq):
             )
             is_relevant = "Yes"
 
+        if iteration >= settings.MAX_ITERATIONS:
+            logger.warning(
+                "MAX_ITERATIONS (%d) reached. Forcing answer generation.", settings.MAX_ITERATIONS
+            )
+            is_relevant = "Yes"
+
         logger.info(
-            "Relevance check: %s | source=%s", is_relevant, state.get("source", "unknown")
+            "Relevance check: %s | iteration=%d | source=%s",
+            is_relevant, iteration, state.get("source", "unknown"),
         )
-        return {**state, "is_relevant": is_relevant}
+        return {**state, "is_relevant": is_relevant, "iteration_count": iteration}
 
     return _check
 
@@ -222,6 +233,11 @@ def build_prompt_node(settings: Settings):
 def generate_node(llm: ChatGroq):
     """Factory: return a node that calls the LLM to produce the final answer.
 
+    Calls ``llm.invoke()`` directly (rather than the ``invoke_text`` helper)
+    so that Groq's ``usage_metadata`` is accessible on the returned
+    ``AIMessage``.  Token counts are written into state for downstream
+    performance evaluation.
+
     Parameters
     ----------
     llm:
@@ -229,8 +245,24 @@ def generate_node(llm: ChatGroq):
     """
     def _generate(state: GraphState) -> GraphState:
         logger.debug("Generating answer...")
-        response = invoke_text(llm, state["prompt"])
-        logger.info("Answer generated | length=%d chars", len(response))
-        return {**state, "response": response}
+        msg = llm.invoke(state["prompt"])
+        response = (msg.content or "").strip()
+
+        # Extract token counts from Groq usage_metadata
+        # (AIMessage.usage_metadata keys: input_tokens, output_tokens, total_tokens)
+        usage = getattr(msg, "usage_metadata", None) or {}
+        prompt_tokens     = int(usage.get("input_tokens",  0))
+        completion_tokens = int(usage.get("output_tokens", 0))
+
+        logger.info(
+            "Answer generated | chars=%d | prompt_tokens=%d | completion_tokens=%d",
+            len(response), prompt_tokens, completion_tokens,
+        )
+        return {
+            **state,
+            "response":          response,
+            "prompt_tokens":     prompt_tokens,
+            "completion_tokens": completion_tokens,
+        }
 
     return _generate

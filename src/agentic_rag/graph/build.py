@@ -24,6 +24,7 @@ Workflow topology
 from __future__ import annotations
 
 import logging
+import time
 
 from langgraph.graph import END, START, StateGraph
 
@@ -43,6 +44,37 @@ from .nodes import (
 from .state import GraphState
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Node timing wrapper
+# ---------------------------------------------------------------------------
+
+def _timed(name: str, fn):
+    """Wrap a node function to record per-node execution time in state.
+
+    Reads the existing ``node_timings`` dict from state (if any), appends
+    this node's elapsed milliseconds, and writes it back.  Safe to use on
+    any node — the merge is non-destructive.
+
+    Parameters
+    ----------
+    name:
+        Node name used as the dict key (matches the LangGraph node constant).
+    fn:
+        The original node callable returned by a node factory.
+    """
+    def _wrapper(state: GraphState) -> GraphState:
+        t0 = time.perf_counter()
+        result = fn(state)
+        elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+        timings = dict((result or state).get("node_timings") or {})
+        timings[name] = elapsed_ms
+        return {**result, "node_timings": timings}
+
+    _wrapper.__name__ = f"timed_{name}"
+    return _wrapper
+
 
 # Node name constants — single source of truth referenced by add_node and edges.
 _ROUTER = "router"
@@ -85,13 +117,13 @@ def build_agent(settings: Settings):
     # --- Graph construction ---
     workflow = StateGraph(GraphState)
 
-    workflow.add_node(_ROUTER, router_node(llm))
-    workflow.add_node(_RETRIEVE_QNA, retrieve_qna_node(collections, settings))
-    workflow.add_node(_RETRIEVE_DEVICE, retrieve_device_node(collections, settings))
-    workflow.add_node(_WEB_SEARCH, web_search_node(search_tool))
-    workflow.add_node(_RELEVANCE_CHECKER, relevance_checker_node(llm))
-    workflow.add_node(_AUGMENT, build_prompt_node(settings))
-    workflow.add_node(_GENERATE, generate_node(llm))
+    workflow.add_node(_ROUTER,           _timed(_ROUTER,           router_node(llm)))
+    workflow.add_node(_RETRIEVE_QNA,     _timed(_RETRIEVE_QNA,     retrieve_qna_node(collections, settings)))
+    workflow.add_node(_RETRIEVE_DEVICE,  _timed(_RETRIEVE_DEVICE,  retrieve_device_node(collections, settings)))
+    workflow.add_node(_WEB_SEARCH,       _timed(_WEB_SEARCH,       web_search_node(search_tool)))
+    workflow.add_node(_RELEVANCE_CHECKER,_timed(_RELEVANCE_CHECKER,relevance_checker_node(llm, settings)))
+    workflow.add_node(_AUGMENT,          _timed(_AUGMENT,          build_prompt_node(settings)))
+    workflow.add_node(_GENERATE,         _timed(_GENERATE,         generate_node(llm)))
 
     # --- Entry edge ---
     workflow.add_edge(START, _ROUTER)
@@ -117,20 +149,7 @@ def build_agent(settings: Settings):
 
     # --- Relevance checker → augment or retry web_search ---
     def _relevance_routing(state: GraphState) -> str:
-        """Increment the iteration counter and decide the next node.
-
-        If ``MAX_ITERATIONS`` is reached the relevance verdict is
-        overridden to ``"Yes"`` so the pipeline always terminates.
-        """
-        iteration = state.get("iteration_count", 0) + 1
-        state["iteration_count"] = iteration
-
-        if iteration >= settings.MAX_ITERATIONS:
-            logger.warning(
-                "MAX_ITERATIONS (%d) reached. Forcing answer generation.", settings.MAX_ITERATIONS
-            )
-            state["is_relevant"] = "Yes"
-
+        """Read the relevance verdict written by the relevance_checker node."""
         return state.get("is_relevant", "Yes")
 
     workflow.add_conditional_edges(

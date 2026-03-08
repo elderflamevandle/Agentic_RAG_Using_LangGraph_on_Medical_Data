@@ -1,0 +1,48 @@
+# =============================================================================
+# Service — AWS Network Load Balancer on port 80 → pod 8501
+# =============================================================================
+#
+# Annotations:
+#   aws-load-balancer-type: nlb
+#     Provisions an AWS Network Load Balancer (Layer 4) instead of the
+#     default Classic ELB.  NLB has lower latency and supports WebSocket
+#     connections (required by Streamlit).
+#
+#   aws-load-balancer-scheme: internet-facing
+#     Makes the NLB reachable from the public internet.
+#     Change to "internal" if the app should only be accessible within
+#     the VPC (e.g. behind a corporate VPN).
+#
+# sessionAffinity: ClientIP
+#   Streamlit relies on WebSocket connections and in-memory st.session_state.
+#   Sticky sessions route each client to the same pod for the duration of
+#   the session (timeoutSeconds: 10800 = 3 hours), preventing mid-session
+#   disconnects if you later scale to multiple replicas.
+#
+# Apply:  kubectl apply -f k8s/service.yaml
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentic-rag-svc
+  namespace: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/component: service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: agentic-rag
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8501
+  # Sticky sessions — required for Streamlit WebSocket + session_state
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800   # 3 hours

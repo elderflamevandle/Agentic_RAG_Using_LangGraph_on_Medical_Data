@@ -1,0 +1,50 @@
+# =============================================================================
+# PersistentVolumeClaims — EBS gp2 volumes
+# =============================================================================
+# Two volumes are needed:
+#
+#   chroma-pvc   (10 Gi)  — ChromaDB persists its SQLite WAL + embedding index
+#   datasets-pvc  (5 Gi)  — CSV files synced from S3 by the dataset-loader
+#                           init container
+#
+# storageClassName: gp2
+#   Standard AWS EBS backed storage class pre-installed on EKS.
+#   Use "gp3" if your cluster has that storage class for better price/perf.
+#
+# accessModes: ReadWriteOnce
+#   EBS volumes can only be attached to a single node at a time.
+#   This is why deployment.yaml uses strategy: Recreate (not RollingUpdate).
+#
+# Apply:  kubectl apply -f k8s/pvc.yaml
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chroma-pvc
+  namespace: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/component: vectorstore
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: datasets-pvc
+  namespace: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/component: datasets
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 5Gi

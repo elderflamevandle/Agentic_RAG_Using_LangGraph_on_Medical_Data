@@ -1,0 +1,148 @@
+# =============================================================================
+# CronJob — hourly re-ingestion of new CSV files
+# =============================================================================
+#
+# Placeholder to replace before applying:
+#   <aws-account-id>  — your 12-digit AWS account number
+#   <region>          — AWS region (e.g. us-east-1)
+#
+# Schedule:  "0 * * * *"  — runs at the top of every hour
+#
+# concurrencyPolicy: Forbid
+#   Prevents two ingest jobs from running simultaneously.  Two concurrent
+#   ChromaDB writers on the same SQLite WAL file would cause lock contention.
+#
+# Two containers (init + main):
+#   1. dataset-sync (init)  — aws s3 sync → datasets-pvc (picks up new CSVs)
+#   2. ingest (main)        — python scripts/ingest.py   (re-ingests all CSVs)
+#
+# Idempotency:
+#   ChromaDB's add_documents() emits a warning for duplicate IDs but never
+#   raises an exception.  Re-running ingest.py on the same CSVs is safe.
+#   Only genuinely new rows (new IDs) will be inserted.
+#
+# Shared volumes with Deployment:
+#   Both chroma-pvc and datasets-pvc are ReadWriteOnce.  The CronJob pod
+#   and the Deployment pod are never scheduled on different nodes
+#   simultaneously (Recreate strategy + single replica), so EBS attachment
+#   conflicts do not occur.  If the app pod is running when the CronJob
+#   fires, ChromaDB's SQLite WAL mode handles the short concurrent write
+#   window safely.
+#
+# If using IRSA, remove the envFrom secretRef in the dataset-sync init
+# container (AWS credentials are provided via the pod's IAM role).
+#
+# Apply:  kubectl apply -f k8s/cronjob.yaml
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agentic-rag-ingest
+  namespace: agentic-rag
+  labels:
+    app.kubernetes.io/name: agentic-rag
+    app.kubernetes.io/component: ingest-cronjob
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Retry the entire pod up to 2 times on failure before marking the Job failed.
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: agentic-rag
+            app.kubernetes.io/component: ingest-job
+        spec:
+          restartPolicy: OnFailure
+
+          # ── Pod-level security context ───────────────────────────────────
+          securityContext:
+            fsGroup: 1000
+            runAsNonRoot: true
+
+          # ── Init containers ──────────────────────────────────────────────
+          initContainers:
+            # ----------------------------------------------------------------
+            # dataset-sync
+            #   Syncs the S3 datasets bucket to datasets-pvc before ingest.
+            #   Only changed / new files are downloaded (aws s3 sync is
+            #   incremental).  Remove envFrom secretRef if using IRSA.
+            # ----------------------------------------------------------------
+            - name: dataset-sync
+              image: amazon/aws-cli:latest
+              command:
+                - sh
+                - -c
+                - |
+                  echo "Syncing datasets from s3://${S3_DATASETS_BUCKET}/datasets/ ..."
+                  aws s3 sync "s3://${S3_DATASETS_BUCKET}/datasets/" /app/datasets/ \
+                    --region "${AWS_DEFAULT_REGION}" \
+                    --no-progress
+                  echo "Sync complete. Files in /app/datasets/:"
+                  ls -lh /app/datasets/
+              env:
+                - name: S3_DATASETS_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: agentic-rag-config
+                      key: S3_DATASETS_BUCKET
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: agentic-rag-config
+                      key: AWS_DEFAULT_REGION
+              # AWS credentials — remove if using IRSA
+              envFrom:
+                - secretRef:
+                    name: agentic-rag-secret
+              volumeMounts:
+                - name: datasets
+                  mountPath: /app/datasets
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "256Mi"
+
+          # ── Main containers ──────────────────────────────────────────────
+          containers:
+            - name: ingest
+              image: <aws-account-id>.dkr.ecr.<region>.amazonaws.com/agentic-rag:latest
+              command: ["python", "scripts/ingest.py"]
+              envFrom:
+                - configMapRef:
+                    name: agentic-rag-config
+                - secretRef:
+                    name: agentic-rag-secret
+              securityContext:
+                runAsUser: 1000
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+              volumeMounts:
+                # Must match CHROMA_PATH in configmap.yaml
+                - name: chroma
+                  mountPath: /app/chroma_db
+                - name: datasets
+                  mountPath: /app/datasets
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "2Gi"
+                limits:
+                  cpu: "2000m"
+                  memory: "4Gi"
+
+          # ── Volumes ──────────────────────────────────────────────────────
+          volumes:
+            - name: chroma
+              persistentVolumeClaim:
+                claimName: chroma-pvc
+            - name: datasets
+              persistentVolumeClaim:
+                claimName: datasets-pvc

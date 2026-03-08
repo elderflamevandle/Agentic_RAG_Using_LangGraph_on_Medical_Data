@@ -5,94 +5,128 @@
 # Build:
 #   docker build -t agentic-rag .
 #
+# ── PowerShell (Windows) ─────────────────────────────────────────────────────
+#
 # Step 1 — ingest datasets into ChromaDB (run once):
-#   docker run --rm \
-#     --env-file .env \
-#     -v "$(pwd)/chroma_db:/app/chroma_db" \
+#   docker run --rm --env-file .env `
+#     -v "${PWD}/chroma_db:/app/chroma_db" `
+#     -v "${PWD}/datasets:/app/datasets" `
 #     agentic-rag python scripts/ingest.py
 #
-# Step 2 — run a query:
-#   docker run --rm \
-#     --env-file .env \
-#     -v "$(pwd)/chroma_db:/app/chroma_db" \
-#     -v "$(pwd)/logs:/app/logs" \
+# Step 2 — run the Streamlit UI:
+#   docker run --rm --env-file .env `
+#     -v "${PWD}/chroma_db:/app/chroma_db" `
+#     -v "${PWD}/logs:/app/logs" `
+#     -p 8501:8501 `
+#     agentic-rag
+#
+# Step 3 (optional) — run a single CLI query:
+#   docker run --rm --env-file .env `
+#     -v "${PWD}/chroma_db:/app/chroma_db" `
 #     agentic-rag python scripts/run_agent.py -q "What causes Kawasaki disease?"
 #
-# Notes:
-#   • Never bake secrets into the image — always pass via --env-file or -e.
-#   • Mount chroma_db as a volume so the vector store persists between runs.
-#   • Mount logs as a volume to access log files from the host machine.
+# ── Git Bash (Windows) ───────────────────────────────────────────────────────
+#
+# IMPORTANT: Git Bash mangles absolute container paths (e.g. /app/...) into
+# Windows paths. Prefix every docker run command with MSYS_NO_PATHCONV=1.
+# $(pwd) still expands correctly — only the container-side paths are affected.
+#
+# Step 1 — ingest datasets into ChromaDB (run once):
+#   MSYS_NO_PATHCONV=1 docker run --rm --env-file .env \
+#     -v "$(pwd)/chroma_db:/app/chroma_db" \
+#     -v "$(pwd)/datasets:/app/datasets" \
+#     agentic-rag python scripts/ingest.py
+#
+# Step 2 — run the Streamlit UI:
+#   MSYS_NO_PATHCONV=1 docker run --rm --env-file .env \
+#     -v "$(pwd)/chroma_db:/app/chroma_db" \
+#     -v "$(pwd)/logs:/app/logs" \
+#     -p 8501:8501 agentic-rag
+#
+# Step 3 (optional) — run a single CLI query:
+#   MSYS_NO_PATHCONV=1 docker run --rm --env-file .env \
+#     -v "$(pwd)/chroma_db:/app/chroma_db" \
+#     agentic-rag python scripts/run_agent.py -q "What causes Kawasaki disease?"
+#
+# ── Linux / macOS ────────────────────────────────────────────────────────────
+#
+# Step 1:  docker run --rm --env-file .env \
+#            -v "$(pwd)/chroma_db:/app/chroma_db" \
+#            -v "$(pwd)/datasets:/app/datasets" \
+#            agentic-rag python scripts/ingest.py
+#
+# Step 2:  docker run --rm --env-file .env \
+#            -v "$(pwd)/chroma_db:/app/chroma_db" \
+#            -v "$(pwd)/logs:/app/logs" \
+#            -p 8501:8501 agentic-rag
+#
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Stage 1 — dependency builder
-# Install Python wheels into an isolated prefix so the final stage stays lean.
-# -----------------------------------------------------------------------------
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim
 
-WORKDIR /build
+WORKDIR /app
 
-# Install build tools needed by some packages (e.g. chromadb's native deps).
+# ---------------------------------------------------------------------------
+# System libraries
+#   build-essential + gcc  — compile any packages that lack pre-built wheels
+#   libgomp1               — OpenMP runtime required by onnxruntime (chromadb)
+# ---------------------------------------------------------------------------
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         gcc \
+        libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only the requirements file first so Docker can cache this layer.
-# The expensive pip install is only re-run when requirements.txt changes.
+# ---------------------------------------------------------------------------
+# Python dependencies
+# Copy requirements first so Docker can cache this layer — the expensive
+# pip install is only re-run when requirements.txt changes.
+# ---------------------------------------------------------------------------
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# ---------------------------------------------------------------------------
+# Application source
+# datasets/ is intentionally excluded — mount it as a volume at runtime
+# so the image stays lean and datasets never get baked in.
+# ---------------------------------------------------------------------------
+COPY src/      ./src/
+COPY scripts/  ./scripts/
+COPY app.py    ./app.py
 
+# ---------------------------------------------------------------------------
+# Runtime directories
+# Pre-create as root before switching to appuser so the non-root user owns
+# them even when no volume is mounted.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /app/chroma_db /app/logs /app/datasets
 
-# -----------------------------------------------------------------------------
-# Stage 2 — runtime image
-# Copies only the installed wheels and the application source — no build tools.
-# -----------------------------------------------------------------------------
-FROM python:3.12-slim AS runtime
-
-# Metadata labels (optional but good practice for production images).
-LABEL org.opencontainers.image.title="Agentic RAG Pipeline"
-LABEL org.opencontainers.image.description="LangGraph + ChromaDB + Groq medical Q&A agent"
-LABEL org.opencontainers.image.version="0.1.0"
-
-WORKDIR /app
-
-# --- Copy installed Python packages from builder stage ---
-COPY --from=builder /install /usr/local
-
-# --- Copy application source ---
-COPY src/       ./src/
-COPY scripts/   ./scripts/
-COPY datasets/  ./datasets/
-
-# --- Persistent directories ---
-# chroma_db and logs are intended to be mounted as volumes (see run commands
-# at the top of this file).  We pre-create them here so the non-root user
-# owns them even if no volume is mounted.
-RUN mkdir -p /app/chroma_db /app/logs
-
-# --- Environment variables ---
-# PYTHONPATH: makes "import agentic_rag" work from any working directory.
-# PYTHONUNBUFFERED: forces stdout/stderr to flush immediately (important for
-#   Docker log streaming — otherwise log lines may appear delayed).
-# PYTHONDONTWRITEBYTECODE: prevents .pyc files cluttering the container FS.
+# ---------------------------------------------------------------------------
+# Environment variables
+#   PYTHONPATH        — makes "import agentic_rag" work from any directory
+#   PYTHONUNBUFFERED  — flush stdout/stderr immediately (important for logs)
+#   PYTHONDONTWRITEBYTECODE — no .pyc files in the container filesystem
+# ---------------------------------------------------------------------------
 ENV PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# --- Non-root user (security best practice) ---
-# Running as root inside a container is a security risk if the container
-# is ever compromised.  A dedicated user limits the blast radius.
+# ---------------------------------------------------------------------------
+# Non-root user (security best practice)
+# ---------------------------------------------------------------------------
 RUN useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app
 
 USER appuser
 
-# --- Default command ---
-# Shows the CLI help by default so running the image without arguments is safe.
-# Override for normal use:
+EXPOSE 8501
+
+# Default: launch the Streamlit UI.
+# Override for CLI use:
 #   docker run ... agentic-rag python scripts/ingest.py
 #   docker run ... agentic-rag python scripts/run_agent.py -q "..."
-CMD ["python", "scripts/run_agent.py", "--help"]
+CMD ["streamlit", "run", "app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true"]
