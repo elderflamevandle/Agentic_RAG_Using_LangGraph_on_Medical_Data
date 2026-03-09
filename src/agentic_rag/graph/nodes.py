@@ -25,10 +25,74 @@ from ..config import Settings
 
 from ..tools.web_search import run_search
 from ..vectorstore.chroma_store import ChromaCollections, ChromaStore
-from .schemas import RelevanceDecision, RouteDecision
+from .prompts import (
+    AUGMENT_PROMPT,
+    QUERY_REWRITER_PROMPT,
+    RELEVANCE_CHECKER_PROMPT,
+    ROUTER_PROMPT,
+)
+from .schemas import RelevanceDecision, RewriteDecision, RouteDecision
 from .state import GraphState, Route
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Query rewriter node
+# ---------------------------------------------------------------------------
+
+def query_rewriter_node(llm: ChatGroq):
+    """Factory: return a node that rewrites ambiguous follow-up queries.
+
+    Resolves coreferences ("its", "they", "the disease") against
+    ``state["conversation_history"]`` so that downstream retrieval nodes
+    receive a fully self-contained query string.
+
+    Is a zero-cost no-op when there is no conversation history (i.e. the
+    first message in a session), skipping the LLM call entirely.
+
+    Parameters
+    ----------
+    llm:
+        ChatGroq instance — same model used by the router and relevance checker.
+    """
+    structured = llm.with_structured_output(RewriteDecision)
+
+    def _rewrite(state: GraphState) -> GraphState:
+        history = state.get("conversation_history") or []
+        if not history:
+            logger.debug("Query rewriter: no history, skipping.")
+            return state
+
+        query = state["query"]
+
+        history_lines = []
+        for turn in history[-4:]:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            history_lines.append(f"  {role}: {turn.get('content', '')[:300]}")
+        history_text = "\n".join(history_lines)
+
+        prompt = QUERY_REWRITER_PROMPT.format(
+            history_text=history_text, query=query,
+        )
+
+        try:
+            decision: RewriteDecision = structured.invoke(prompt)
+            if decision.needs_rewrite and decision.rewritten_query.strip():
+                logger.info(
+                    "Query rewritten | original=%r | rewritten=%r",
+                    query, decision.rewritten_query,
+                )
+                return {**state, "rewritten_query": decision.rewritten_query.strip()}
+            logger.debug("Query rewriter: standalone query, no rewrite | query=%r", query)
+            return state
+        except Exception as exc:
+            logger.warning(
+                "Query rewriter structured-output failed (%s). Using original query.", exc
+            )
+            return state
+
+    return _rewrite
 
 
 # ---------------------------------------------------------------------------
@@ -50,15 +114,8 @@ def router_node(llm: ChatGroq):
     structured = llm.with_structured_output(RouteDecision)
 
     def _router(state: GraphState) -> GraphState:
-        query = state["query"]
-        prompt = (
-            "You are a routing agent. Choose exactly one source to answer the query.\n\n"
-            "Options:\n"
-            "  retrieve_qna    — general medical knowledge: symptoms, diseases, treatments.\n"
-            "  retrieve_device — medical device manuals: model numbers, manufacturers, instructions.\n"
-            "  web_search      — recent news, brand names, or anything unlikely to be in local data.\n\n"
-            f"Query: {query}"
-        )
+        query = state.get("rewritten_query") or state["query"]
+        prompt = ROUTER_PROMPT.format(query=query)
         try:
             decision = structured.invoke(prompt)
             route: Route = decision.route
@@ -89,7 +146,7 @@ def retrieve_qna_node(collections: ChromaCollections, settings: Settings):
         Runtime configuration — provides ``TOP_K``.
     """
     def _retrieve(state: GraphState) -> GraphState:
-        query = state["query"]
+        query = state.get("rewritten_query") or state["query"]
         logger.debug("Q&A retrieval | top_k=%d | query=%r", settings.TOP_K, query)
         ctx, docs = ChromaStore.query(collections.qna, query_text=query, top_k=settings.TOP_K)
         logger.info("Q&A retrieval complete | docs_returned=%d", len(docs))
@@ -109,7 +166,7 @@ def retrieve_device_node(collections: ChromaCollections, settings: Settings):
         Runtime configuration — provides ``TOP_K``.
     """
     def _retrieve(state: GraphState) -> GraphState:
-        query = state["query"]
+        query = state.get("rewritten_query") or state["query"]
         logger.debug("Device retrieval | top_k=%d | query=%r", settings.TOP_K, query)
         ctx, docs = ChromaStore.query(collections.device, query_text=query, top_k=settings.TOP_K)
         logger.info("Device retrieval complete | docs_returned=%d", len(docs))
@@ -127,7 +184,7 @@ def web_search_node(search_tool):
         A ``GoogleSerperAPIWrapper`` instance.
     """
     def _search(state: GraphState) -> GraphState:
-        query = state["query"]
+        query = state.get("rewritten_query") or state["query"]
         logger.debug("Web search | query=%r", query)
         context = run_search(search_tool, query=query)
         logger.info("Web search complete | result_chars=%d", len(context))
@@ -157,16 +214,11 @@ def relevance_checker_node(llm: ChatGroq, settings: Settings):
     structured = llm.with_structured_output(RelevanceDecision)
 
     def _check(state: GraphState) -> GraphState:
-        query = state["query"]
+        query = state.get("rewritten_query") or state["query"]
         context = state.get("context", "")
         iteration = state.get("iteration_count", 0) + 1
 
-        prompt = (
-            "Decide strictly whether the context below is relevant to the user query.\n"
-            "Respond only in the required structured schema.\n\n"
-            f"User Query: {query}\n\n"
-            f"Context:\n{context}"
-        )
+        prompt = RELEVANCE_CHECKER_PROMPT.format(query=query, context=context)
         try:
             decision = structured.invoke(prompt)
             is_relevant = decision.is_relevant
@@ -174,7 +226,7 @@ def relevance_checker_node(llm: ChatGroq, settings: Settings):
             logger.warning(
                 "Relevance checker structured-output failed (%s). Defaulting to Yes.", exc
             )
-            is_relevant = "Yes"
+            is_relevant = "Yes" #TODO: change this to no
 
         if iteration >= settings.MAX_ITERATIONS:
             logger.warning(
@@ -195,35 +247,107 @@ def relevance_checker_node(llm: ChatGroq, settings: Settings):
 # Prompt builder node
 # ---------------------------------------------------------------------------
 
-def build_prompt_node(settings: Settings):
+def build_prompt_node(settings: Settings, memory_store=None):
     """Factory: return a node that assembles the RAG prompt for the generator.
 
-    Combines the source label, retrieved context, original query, and the
-    configured word-count constraint into a single instruction string.
+    Uses conversation history from the current session for follow-up context.
+    Long-term memory (``memory_store``) is supported but disabled by default
+    — pass ``None`` to skip it (session-only mode).
 
     Parameters
     ----------
     settings:
-        Runtime configuration — provides ``ANSWER_WORD_LIMIT``.
+        Runtime configuration — provides ``ANSWER_WORD_LIMIT``, ``MEMORY_TOP_K``.
+    memory_store:
+        Optional ``AgentMemoryStore`` instance.  When ``None`` the node
+        uses only current-session conversation history (no cross-session memory).
     """
     def _build(state: GraphState) -> GraphState:
-        query = state["query"]
+        query   = state["query"]
         context = state.get("context", "")
-        source = state.get("source", "unknown")
-        prompt = (
-            "You are a knowledgeable medical assistant. "
-            "Answer the question using *only* the context provided below.\n"
-            "If the context does not contain enough information, "
-            "briefly state what is missing rather than guessing.\n\n"
-            f"Source: {source}\n\n"
-            f"Context:\n{context}\n\n"
-            f"Question: {query}\n\n"
-            f"Constraint: Keep the answer within approximately {settings.ANSWER_WORD_LIMIT} words."
+        source  = state.get("source", "unknown")
+
+        # --- Current-session conversation history ---
+        history_section = ""
+        history = state.get("conversation_history") or []
+        if history:
+            lines = ["Conversation History:"]
+            for turn in history:
+                role = "User" if turn.get("role") == "user" else "Assistant"
+                lines.append(f"  {role}: {turn.get('content', '')[:300]}")
+            history_section = "\n".join(lines) + "\n\n"
+
+        # --- Long-term memory (disabled when memory_store is None) ---
+        memory_section = ""
+        if memory_store is not None:
+            try:
+                prefs    = memory_store.get_preferences()
+                past_qas = memory_store.retrieve_similar(query, top_k=settings.MEMORY_TOP_K)
+
+                parts: list[str] = []
+                topics = prefs.get("topics_of_interest", [])
+                if topics:
+                    parts.append(f"User interests: {', '.join(topics[:5])}")
+
+                if past_qas:
+                    parts.append("Relevant past interactions:")
+                    for pa in past_qas:
+                        parts.append(f"  Past Q: {pa['query']}")
+                        parts.append(f"  Past A: {pa['response'][:200]}")
+
+                if parts:
+                    memory_section = "\n".join(parts) + "\n\n"
+            except Exception as exc:
+                logger.warning("Memory injection failed (non-fatal): %s", exc)
+
+        prompt = AUGMENT_PROMPT.format(
+            history_section=history_section + (f"Memory Context:\n{memory_section}" if memory_section else ""),
+            source=source,
+            context=context,
+            query=query,
+            word_limit=settings.ANSWER_WORD_LIMIT,
         )
-        logger.debug("Prompt built | length=%d chars", len(prompt))
-        return {**state, "prompt": prompt}
+        logger.debug(
+            "Prompt built | chars=%d | history_turns=%d | memory=%s",
+            len(prompt), len(history), bool(memory_section),
+        )
+        return {**state, "prompt": prompt, "memory_context": memory_section}
 
     return _build
+
+
+# ---------------------------------------------------------------------------
+# Memory save node
+# ---------------------------------------------------------------------------
+
+def save_memory_node(memory_store=None):
+    """Factory: return a node that persists the completed Q&A to long-term memory.
+
+    Runs as the final graph node (after generate).  Failures are caught and
+    logged so a memory write error never crashes the pipeline.
+
+    Parameters
+    ----------
+    memory_store:
+        ``AgentMemoryStore`` instance.  When ``None`` the node is a no-op
+        (memory disabled), keeping the graph wiring intact.
+    """
+    def _save(state: GraphState) -> GraphState:
+        if memory_store is None:
+            return state
+        try:
+            memory_store.save_interaction(
+                query=state["query"],
+                response=state.get("response", ""),
+                source=state.get("source", ""),
+                route=state.get("route", ""),
+                thread_id=state.get("thread_id", "default"),
+            )
+        except Exception as exc:
+            logger.warning("Memory save failed (non-fatal): %s", exc)
+        return state
+
+    return _save
 
 
 # ---------------------------------------------------------------------------

@@ -25,6 +25,7 @@ if str(_SRC_DIR) not in sys.path:
 
 import dataclasses
 import time
+import uuid
 
 import streamlit as st
 
@@ -108,16 +109,19 @@ def _load_agent(
         The compiled agent graph, the active settings, and an LLM instance
         for the LLM-as-judge evaluation step.
     """
-    base = get_settings()                       # reads API keys + infra from .env
-    settings = base.model_copy(update={         # override only the tunable fields
+    base = get_settings()
+    settings = base.model_copy(update={
         "GROQ_MODEL":         model,
         "TEMPERATURE":        temperature,
         "TOP_K":              top_k,
         "MAX_ITERATIONS":     max_iterations,
         "ANSWER_WORD_LIMIT":  answer_word_limit,
     })
-    agent   = build_agent(settings)
-    eval_llm = build_llm(settings)              # reused for LLM-as-judge evaluation
+    # Session-only mode: no long-term memory, no checkpointer.
+    # Conversation context comes from st.session_state.messages (current session).
+    # Long-term memory (AgentMemoryStore + SqliteSaver) can be re-enabled for deployment.
+    agent    = build_agent(settings, checkpointer=None, memory_store=None)
+    eval_llm = build_llm(settings)
     logger.info(
         "Agent built | model=%s temp=%.1f top_k=%d max_iter=%d word_limit=%d",
         model, temperature, top_k, max_iterations, answer_word_limit,
@@ -233,7 +237,8 @@ def _init_session() -> None:
         st.session_state.messages = []
     if "active_config" not in st.session_state:
         st.session_state.active_config = None
-    # feedback_rating and feedback_comment are stored per-message in messages[i]
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = str(uuid.uuid4())
 
 
 def _render_history() -> None:
@@ -262,8 +267,22 @@ def _run_query(agent, query: str) -> tuple[str, str, dict, float]:
     -------
     tuple of (response, source, full_state, latency_ms)
     """
+    thread_id = st.session_state.get("thread_id", "default")
+    config    = {"configurable": {"thread_id": thread_id}}
+
+    # Build sequential conversation history from the last 3 Q&A pairs (6 messages)
+    # so the LLM can resolve follow-up pronouns like "its", "they", "it", etc.
+    history = [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in st.session_state.get("messages", [])[-6:]
+        if msg["role"] in ("user", "assistant")
+    ]
+
     t0 = time.perf_counter()
-    full_state = agent.invoke({"query": query})
+    full_state = agent.invoke(
+        {"query": query, "thread_id": thread_id, "conversation_history": history},
+        config=config,
+    )
     latency_ms = (time.perf_counter() - t0) * 1000
     response = (full_state.get("response") or "").strip() or "No response was generated."
     source   = full_state.get("source", "unknown")
@@ -299,70 +318,35 @@ def _render_metrics(metrics: dict) -> None:
     metrics:
         ``dataclasses.asdict(EvaluationResult)`` stored in session state.
     """
-    with st.expander("Performance Metrics", expanded=True):
+    with st.expander("Answer Quality", expanded=True):
         c1, c2, c3, c4 = st.columns(4)
 
-        # --- 1. Outcome Quality ---
+        gs   = metrics.get("groundedness_score", 0.0)
+        hall = metrics.get("hallucination_flag", False)
+        gf   = metrics.get("goal_fulfillment_score", 0.0)
+        lat  = metrics.get("total_latency_ms", 0.0)
+
         with c1:
-            gf  = metrics.get("goal_fulfillment_score", 0.0)
-            ar  = metrics.get("answer_relevance_score", 0.0)
-            cmp = metrics.get("answer_completeness_pct", 0.0)
-            fps = metrics.get("first_pass_success", False)
-            avg_oq = (gf + ar) / 2
-            st.markdown(f"**Outcome Quality** {_score_indicator(avg_oq)}")
-            st.metric("Goal Fulfillment",    f"{gf:.0%}")
-            st.metric("Answer Relevance",    f"{ar:.0%}")
-            st.metric("Answer Completeness", f"{cmp:.0f}%")
-            st.metric("1st-Pass Success",    "Yes ✓" if fps else "No ✗")
+            st.markdown(f"**Groundedness** {_score_indicator(gs)}")
+            st.metric("Score", f"{gs:.0%}",
+                      help="Is the answer grounded in retrieved data? (LLM-as-judge)")
+            st.caption("⚠️ Hallucination detected" if hall else "✓ No hallucination")
 
-        # --- 2. Reasoning Quality ---
         with c2:
-            rs  = metrics.get("reasoning_score", 0.0)
-            rc  = metrics.get("routing_confidence", 0.0)
-            route = metrics.get("routing_decision", "—").replace("_", " ").title()
-            tries = metrics.get("retrieval_attempts", 0)
-            avg_rq = (rs + rc) / 2
-            st.markdown(f"**Reasoning Quality** {_score_indicator(avg_rq)}")
-            st.metric("Reasoning Score",    f"{rs:.0%}")
-            st.metric("Routing Confidence", f"{rc:.0%}")
-            st.metric("Route Chosen",       route)
-            st.metric("Retrieval Attempts", tries)
+            st.markdown(f"**Goal Fulfillment** {_score_indicator(gf)}")
+            st.metric("Score", f"{gf:.0%}",
+                      help="Did the answer fully address the question? (LLM-as-judge)")
 
-        # --- 3. Data Groundedness ---
         with c3:
-            gs   = metrics.get("groundedness_score", 0.0)
-            cf   = metrics.get("citation_faithfulness_score", 0.0)
-            hall = metrics.get("hallucination_flag", False)
-            cu   = metrics.get("context_utilization_pct", 0.0)
-            sr   = metrics.get("source_reliability", 0.0)
-            avg_dg = (gs + cf) / 2
-            st.markdown(f"**Data Groundedness** {_score_indicator(avg_dg)}")
-            st.metric("Groundedness",          f"{gs:.0%}")
-            st.metric("Citation Faithfulness", f"{cf:.0%}")
-            st.metric("Hallucination",         "Detected ⚠️" if hall else "None ✓")
-            st.metric("Context Utilized",      f"{cu:.0f}%")
-            st.metric("Source Reliability",    f"{sr:.0%}")
-
-        # --- 4. Operational Efficiency ---
-        with c4:
-            lat   = metrics.get("total_latency_ms", 0.0)
+            st.markdown("**Latency** ⚙️")
+            st.metric("Response time", f"{lat / 1000:.2f}s")
             ptoks = metrics.get("prompt_tokens", 0)
             ctoks = metrics.get("completion_tokens", 0)
-            cost  = metrics.get("estimated_cost_usd", 0.0)
-            st.markdown("**Operational Efficiency** ⚙️")
-            st.metric("Total Latency",   f"{lat / 1000:.2f}s")
-            st.metric("Tokens In",       f"{ptoks:,}")
-            st.metric("Tokens Out",      f"{ctoks:,}")
-            st.metric("Est. Cost",       f"${cost:.5f}")
+            st.caption(f"Tokens: {ptoks} in / {ctoks} out")
 
-        # --- Node timing breakdown ---
-        node_timings: dict = metrics.get("node_timings") or {}
-        if node_timings:
-            st.markdown("---")
-            st.markdown("**Node Timings (ms)**")
-            cols = st.columns(len(node_timings))
-            for col, (node, ms) in zip(cols, node_timings.items()):
-                col.metric(node.replace("_", " ").title(), f"{ms:.0f} ms")
+        with c4:
+            st.markdown("**Feedback** 💬")
+            st.caption("Rate below ↓")
 
 
 def _render_feedback(msg_idx: int) -> None:
