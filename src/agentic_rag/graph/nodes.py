@@ -38,6 +38,21 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Token extraction helper
+# ---------------------------------------------------------------------------
+
+def _extract_tokens(raw_msg) -> tuple[int, int]:
+    """Extract (prompt_tokens, completion_tokens) from an AIMessage.
+
+    Works with both raw ``llm.invoke()`` results and the ``"raw"`` key
+    returned by ``with_structured_output(include_raw=True)``.
+    Returns ``(0, 0)`` when usage metadata is unavailable.
+    """
+    usage = getattr(raw_msg, "usage_metadata", None) or {}
+    return int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
+
+
+# ---------------------------------------------------------------------------
 # Query rewriter node
 # ---------------------------------------------------------------------------
 
@@ -56,7 +71,7 @@ def query_rewriter_node(llm: ChatGroq):
     llm:
         ChatGroq instance — same model used by the router and relevance checker.
     """
-    structured = llm.with_structured_output(RewriteDecision)
+    structured = llm.with_structured_output(RewriteDecision, include_raw=True)
 
     def _rewrite(state: GraphState) -> GraphState:
         history = state.get("conversation_history") or []
@@ -77,7 +92,13 @@ def query_rewriter_node(llm: ChatGroq):
         )
 
         try:
-            decision: RewriteDecision = structured.invoke(prompt)
+            result = structured.invoke(prompt)
+            decision: RewriteDecision = result["parsed"]
+            p_tok, c_tok = _extract_tokens(result["raw"])
+            logger.info(
+                "Query rewriter | needs_rewrite=%s | prompt_tokens=%d | completion_tokens=%d",
+                decision.needs_rewrite, p_tok, c_tok,
+            )
             if decision.needs_rewrite and decision.rewritten_query.strip():
                 logger.info(
                     "Query rewritten | original=%r | rewritten=%r",
@@ -111,21 +132,26 @@ def router_node(llm: ChatGroq):
     llm:
         ChatGroq instance used for routing decisions.
     """
-    structured = llm.with_structured_output(RouteDecision)
+    structured = llm.with_structured_output(RouteDecision, include_raw=True)
 
     def _router(state: GraphState) -> GraphState:
         query = state.get("rewritten_query") or state["query"]
         prompt = ROUTER_PROMPT.format(query=query)
         try:
-            decision = structured.invoke(prompt)
+            result = structured.invoke(prompt)
+            decision = result["parsed"]
             route: Route = decision.route
+            p_tok, c_tok = _extract_tokens(result["raw"])
+            logger.info(
+                "Router decision: %s | query=%r | prompt_tokens=%d | completion_tokens=%d",
+                route, query, p_tok, c_tok,
+            )
         except Exception as exc:
             logger.warning(
                 "Router structured-output failed (%s). Falling back to web_search.", exc
             )
             route = "web_search"
 
-        logger.info("Router decision: %s | query=%r", route, query)
         return {**state, "route": route, "source": route}
 
     return _router
@@ -211,7 +237,7 @@ def relevance_checker_node(llm: ChatGroq, settings: Settings):
     settings:
         Runtime configuration — provides ``MAX_ITERATIONS``.
     """
-    structured = llm.with_structured_output(RelevanceDecision)
+    structured = llm.with_structured_output(RelevanceDecision, include_raw=True)
 
     def _check(state: GraphState) -> GraphState:
         query = state.get("rewritten_query") or state["query"]
@@ -220,13 +246,19 @@ def relevance_checker_node(llm: ChatGroq, settings: Settings):
 
         prompt = RELEVANCE_CHECKER_PROMPT.format(query=query, context=context)
         try:
-            decision = structured.invoke(prompt)
+            result = structured.invoke(prompt)
+            decision = result["parsed"]
             is_relevant = decision.is_relevant
+            p_tok, c_tok = _extract_tokens(result["raw"])
+            logger.info(
+                "Relevance check: %s | iteration=%d | source=%s | prompt_tokens=%d | completion_tokens=%d",
+                is_relevant, iteration, state.get("source", "unknown"), p_tok, c_tok,
+            )
         except Exception as exc:
             logger.warning(
-                "Relevance checker structured-output failed (%s). Defaulting to Yes.", exc
+                "Relevance checker structured-output failed (%s). Defaulting to No (retry).", exc
             )
-            is_relevant = "Yes" #TODO: change this to no
+            is_relevant = "No"
 
         if iteration >= settings.MAX_ITERATIONS:
             logger.warning(
@@ -234,10 +266,6 @@ def relevance_checker_node(llm: ChatGroq, settings: Settings):
             )
             is_relevant = "Yes"
 
-        logger.info(
-            "Relevance check: %s | iteration=%d | source=%s",
-            is_relevant, iteration, state.get("source", "unknown"),
-        )
         return {**state, "is_relevant": is_relevant, "iteration_count": iteration}
 
     return _check

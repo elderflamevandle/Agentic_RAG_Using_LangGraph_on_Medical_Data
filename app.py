@@ -40,10 +40,68 @@ from agentic_rag.metrics import EvaluationResult, evaluate
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Medical Q&A Agent",
-    page_icon=":hospital:",
-    layout="centered",
+    page_icon=":stethoscope:",
+    layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ---------------------------------------------------------------------------
+# Custom CSS for compact metrics and clean UI
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+    /* Tighten main content padding */
+    .block-container { padding-top: 2rem; max-width: 900px; }
+
+    /* Compact metric cards */
+    .metric-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        border-left: 3px solid #dee2e6;
+    }
+    .metric-card.green  { border-left-color: #28a745; }
+    .metric-card.yellow { border-left-color: #ffc107; }
+    .metric-card.red    { border-left-color: #dc3545; }
+
+    .metric-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+    }
+    .metric-value {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #212529;
+    }
+    .metric-sub {
+        font-size: 0.65rem;
+        color: #868e96;
+    }
+
+    /* Source badge */
+    .source-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin-top: 4px;
+    }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] { background-color: #fafbfc; }
+    [data-testid="stSidebar"] .stMarkdown h2 { font-size: 1.1rem; }
+
+    /* Chat input */
+    .stChatInput { border-radius: 12px; }
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Logging — idempotent; setup_logging guards against duplicate handlers.
@@ -55,16 +113,16 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 _GROQ_MODELS = [
-    "llama-3.3-70b-versatile",   # default — best quality
-    "llama-3.1-8b-instant",      # fast, lightweight
-    "gemma2-9b-it",              # Google Gemma via Groq
-    "mixtral-8x7b-32768",        # large context window
+    "llama-3.3-70b-versatile",   # default — best quality, 131K context
+    "llama-3.1-8b-instant",      # fast, lightweight, 131K context
+    "openai/gpt-oss-120b",       # OpenAI open-source, 131K context
+    "openai/gpt-oss-20b",        # OpenAI open-source mid-size, 131K context
 ]
 
 _SOURCE_COLOURS: dict[str, str] = {
-    "Medical Q&A Collection": "#1f77b4",   # blue
-    "Medical Device Manual":  "#2ca02c",   # green
-    "Web Search (Serper)":    "#d62728",   # red
+    "Medical Q&A Collection": "#1f77b4",
+    "Medical Device Manual":  "#2ca02c",
+    "Web Search (Serper)":    "#d62728",
 }
 _FALLBACK_COLOUR = "#7f7f7f"
 
@@ -72,19 +130,33 @@ _FALLBACK_COLOUR = "#7f7f7f"
 def _source_badge(source: str) -> str:
     """Return an HTML badge string for the given source label."""
     colour = _SOURCE_COLOURS.get(source, _FALLBACK_COLOUR)
+    return f'<span class="source-badge" style="background-color:{colour};">{source}</span>'
+
+
+def _metric_card(label: str, value: str, sub: str = "", score: float | None = None) -> str:
+    """Return HTML for a compact metric card with optional color coding."""
+    if score is not None:
+        if score >= 0.75:
+            cls = "green"
+        elif score >= 0.5:
+            cls = "yellow"
+        else:
+            cls = "red"
+    else:
+        cls = ""
+    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ""
     return (
-        f'<span style="background-color:{colour};color:#ffffff;'
-        f'padding:2px 10px;border-radius:4px;'
-        f'font-size:0.72rem;font-weight:600;">'
-        f"{source}</span>"
+        f'<div class="metric-card {cls}">'
+        f'<div class="metric-label">{label}</div>'
+        f'<div class="metric-value">{value}</div>'
+        f'{sub_html}</div>'
     )
 
 
 # ---------------------------------------------------------------------------
-# Agent cache — keyed on every tunable parameter.
-# A new combination triggers a rebuild; the same combination reuses the cache.
+# Agent cache
 # ---------------------------------------------------------------------------
-@st.cache_resource(show_spinner="Applying settings and loading agent…")
+@st.cache_resource(show_spinner="Loading agent...")
 def _load_agent(
     model: str,
     temperature: float,
@@ -92,23 +164,7 @@ def _load_agent(
     max_iterations: int,
     answer_word_limit: int,
 ):
-    """Build and cache the LangGraph agent for a specific parameter combination.
-
-    ``st.cache_resource`` keys the cache on all arguments, so changing any
-    slider or selectbox produces a fresh agent while keeping previously-used
-    configurations cached in memory.
-
-    Parameters
-    ----------
-    model, temperature, top_k, max_iterations, answer_word_limit:
-        User-selected values from the sidebar widgets.
-
-    Returns
-    -------
-    tuple[CompiledGraph, Settings, ChatGroq]
-        The compiled agent graph, the active settings, and an LLM instance
-        for the LLM-as-judge evaluation step.
-    """
+    """Build and cache the LangGraph agent for a specific parameter combination."""
     base = get_settings()
     settings = base.model_copy(update={
         "GROQ_MODEL":         model,
@@ -130,21 +186,15 @@ def _load_agent(
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — renders widgets and returns the chosen parameter values.
+# Sidebar
 # ---------------------------------------------------------------------------
 def _render_sidebar() -> tuple[str, float, int, int, int]:
-    """Render all interactive controls and return the current parameter values.
-
-    Returns
-    -------
-    tuple of (model, temperature, top_k, max_iterations, answer_word_limit)
-    """
-    defaults = get_settings()   # used only to seed widget default values
+    """Render sidebar controls and return current parameter values."""
+    defaults = get_settings()
 
     with st.sidebar:
-        st.header("Settings")
-        st.caption("Adjust parameters below. The agent rebuilds automatically when anything changes.")
-        st.markdown("---")
+        st.markdown("## Settings")
+        st.caption("Agent rebuilds automatically on change.")
 
         # --- Model selection ---
         default_model_idx = (
@@ -156,59 +206,46 @@ def _render_sidebar() -> tuple[str, float, int, int, int]:
             "Model",
             options=_GROQ_MODELS,
             index=default_model_idx,
-            help="Groq-hosted model used for routing, relevance checking, and answer generation.",
+            help="Groq-hosted model for routing, relevance checking, and generation.",
         )
 
-        st.markdown("---")
+        # --- Sliders in two columns ---
+        col1, col2 = st.columns(2)
+        with col1:
+            temperature = st.slider(
+                "Temperature", 0.0, 2.0,
+                value=float(defaults.TEMPERATURE), step=0.1,
+                help="0 = deterministic, higher = creative.",
+            )
+            top_k = st.slider(
+                "Top-K", 1, 20,
+                value=int(defaults.TOP_K), step=1,
+                help="Documents fetched from ChromaDB.",
+            )
+        with col2:
+            max_iterations = st.slider(
+                "Max retries", 1, 10,
+                value=int(defaults.MAX_ITERATIONS), step=1,
+                help="Relevance-check retry limit.",
+            )
+            answer_word_limit = st.slider(
+                "Word limit", 10, 300,
+                value=int(defaults.ANSWER_WORD_LIMIT), step=10,
+                help="Soft word-count target for answers.",
+            )
 
-        # --- Numeric sliders ---
-        temperature = st.slider(
-            "Temperature",
-            min_value=0.0,
-            max_value=2.0,
-            value=float(defaults.TEMPERATURE),
-            step=0.1,
-            help="Controls randomness. 0 = deterministic, higher = more creative.",
+        st.divider()
+
+        # --- Source legend (compact) ---
+        st.markdown("**Sources**")
+        legend_html = " &nbsp; ".join(
+            _source_badge(label) for label in _SOURCE_COLOURS
         )
+        st.markdown(legend_html, unsafe_allow_html=True)
 
-        top_k = st.slider(
-            "Top-K retrieval",
-            min_value=1,
-            max_value=20,
-            value=int(defaults.TOP_K),
-            step=1,
-            help="Number of nearest-neighbour documents fetched from ChromaDB.",
-        )
+        st.divider()
 
-        max_iterations = st.slider(
-            "Max iterations",
-            min_value=1,
-            max_value=10,
-            value=int(defaults.MAX_ITERATIONS),
-            step=1,
-            help="How many times the relevance-check loop can retry via web search before forcing an answer.",
-        )
-
-        answer_word_limit = st.slider(
-            "Answer word limit",
-            min_value=10,
-            max_value=300,
-            value=int(defaults.ANSWER_WORD_LIMIT),
-            step=10,
-            help="Soft target injected into the generation prompt to control answer length.",
-        )
-
-        st.markdown("---")
-
-        # --- Source legend ---
-        st.markdown("**Source legend**")
-        for label, colour in _SOURCE_COLOURS.items():
-            st.markdown(_source_badge(label), unsafe_allow_html=True)
-            st.write("")
-
-        st.markdown("---")
-
-        if st.button("Clear chat history", use_container_width=True):
+        if st.button("Clear chat", use_container_width=True, type="secondary"):
             st.session_state.messages = []
             st.rerun()
 
@@ -218,19 +255,16 @@ def _render_sidebar() -> tuple[str, float, int, int, int]:
         down_count = sum(1 for m in msgs if m.get("feedback_rating") == "down")
         rated = up_count + down_count
         if rated:
-            st.markdown("---")
-            st.markdown("**Session feedback**")
-            st.markdown(f"👍 **{up_count}** helpful &nbsp;&nbsp; 👎 **{down_count}** not helpful")
             satisfaction = round(up_count / rated * 100)
-            st.progress(satisfaction / 100, text=f"{satisfaction}% satisfaction")
-
-        st.caption("Run `python scripts/ingest.py` once before starting the app.")
+            st.divider()
+            st.caption(f"**Feedback:** {up_count} helpful / {down_count} not &middot; {satisfaction}%")
+            st.progress(satisfaction / 100)
 
     return model, temperature, top_k, max_iterations, answer_word_limit
 
 
 # ---------------------------------------------------------------------------
-# Chat session helpers
+# Session helpers
 # ---------------------------------------------------------------------------
 def _init_session() -> None:
     if "messages" not in st.session_state:
@@ -254,24 +288,10 @@ def _render_history() -> None:
 
 
 def _run_query(agent, query: str) -> tuple[str, str, dict, float]:
-    """Invoke the agent graph and return the response, source, full state, and wall-clock latency.
-
-    Parameters
-    ----------
-    agent:
-        Compiled LangGraph agent.
-    query:
-        User question string.
-
-    Returns
-    -------
-    tuple of (response, source, full_state, latency_ms)
-    """
+    """Invoke the agent and return (response, source, full_state, latency_ms)."""
     thread_id = st.session_state.get("thread_id", "default")
     config    = {"configurable": {"thread_id": thread_id}}
 
-    # Build sequential conversation history from the last 3 Q&A pairs (6 messages)
-    # so the LLM can resolve follow-up pronouns like "its", "they", "it", etc.
     history = [
         {"role": msg["role"], "content": msg["content"]}
         for msg in st.session_state.get("messages", [])[-6:]
@@ -290,81 +310,91 @@ def _run_query(agent, query: str) -> tuple[str, str, dict, float]:
 
 
 # ---------------------------------------------------------------------------
-# Metrics rendering
+# Metrics rendering — compact cards with small text
 # ---------------------------------------------------------------------------
-
-def _score_indicator(score: float) -> str:
-    """Return a coloured emoji indicator for a 0–1 score."""
-    if score >= 0.75:
-        return "🟢"
-    if score >= 0.5:
-        return "🟡"
-    return "🔴"
-
-
 def _render_metrics(metrics: dict) -> None:
-    """Render the five-category performance metrics dashboard below each answer.
-
-    Categories
-    ----------
-    1. Outcome Quality      — goal fulfillment, answer relevance, completeness, 1st-pass
-    2. Reasoning Quality    — reasoning score, routing confidence, route, retries
-    3. Data Groundedness    — groundedness, citation faithfulness, hallucination, ctx %, reliability
-    4. Operational Efficiency — latency, token counts, estimated cost
-    5. Feedback             — rendered separately by _render_feedback()
-
-    Parameters
-    ----------
-    metrics:
-        ``dataclasses.asdict(EvaluationResult)`` stored in session state.
-    """
-    with st.expander("Answer Quality", expanded=True):
-        c1, c2, c3, c4 = st.columns(4)
-
+    """Render compact performance metrics below each answer."""
+    with st.expander("Performance Metrics", expanded=False):
         gs   = metrics.get("groundedness_score", 0.0)
-        hall = metrics.get("hallucination_flag", False)
         gf   = metrics.get("goal_fulfillment_score", 0.0)
+        ar   = metrics.get("answer_relevance_score", 0.0)
+        rs   = metrics.get("reasoning_score", 0.0)
+        rc   = metrics.get("routing_confidence", 0.0)
+        cf   = metrics.get("citation_faithfulness_score", 0.0)
+        hall = metrics.get("hallucination_flag", False)
         lat  = metrics.get("total_latency_ms", 0.0)
+        ptoks = metrics.get("prompt_tokens", 0)
+        ctoks = metrics.get("completion_tokens", 0)
+        ttoks = metrics.get("total_tokens", 0)
+        cost  = metrics.get("estimated_cost_usd", 0.0)
+        comp  = metrics.get("answer_completeness_pct", 0.0)
+        ctx_u = metrics.get("context_utilization_pct", 0.0)
+        src_r = metrics.get("source_reliability", 0.0)
+        route = metrics.get("routing_decision", "")
+        retries = metrics.get("retrieval_attempts", 0)
+        timings = metrics.get("node_timings", {})
 
+        # --- Row 1: Quality scores ---
+        c1, c2, c3, c4 = st.columns(4)
         with c1:
-            st.markdown(f"**Groundedness** {_score_indicator(gs)}")
-            st.metric("Score", f"{gs:.0%}",
-                      help="Is the answer grounded in retrieved data? (LLM-as-judge)")
-            st.caption("⚠️ Hallucination detected" if hall else "✓ No hallucination")
-
+            st.markdown(_metric_card(
+                "Groundedness", f"{gs:.0%}",
+                "Hallucination!" if hall else "No hallucination",
+                score=gs,
+            ), unsafe_allow_html=True)
         with c2:
-            st.markdown(f"**Goal Fulfillment** {_score_indicator(gf)}")
-            st.metric("Score", f"{gf:.0%}",
-                      help="Did the answer fully address the question? (LLM-as-judge)")
-
+            st.markdown(_metric_card(
+                "Goal Fulfillment", f"{gf:.0%}", score=gf,
+            ), unsafe_allow_html=True)
         with c3:
-            st.markdown("**Latency** ⚙️")
-            st.metric("Response time", f"{lat / 1000:.2f}s")
-            ptoks = metrics.get("prompt_tokens", 0)
-            ctoks = metrics.get("completion_tokens", 0)
-            st.caption(f"Tokens: {ptoks} in / {ctoks} out")
-
+            st.markdown(_metric_card(
+                "Answer Relevance", f"{ar:.0%}", score=ar,
+            ), unsafe_allow_html=True)
         with c4:
-            st.markdown("**Feedback** 💬")
-            st.caption("Rate below ↓")
+            st.markdown(_metric_card(
+                "Reasoning", f"{rs:.0%}", score=rs,
+            ), unsafe_allow_html=True)
+
+        # --- Row 2: Routing + Grounding ---
+        c5, c6, c7, c8 = st.columns(4)
+        with c5:
+            st.markdown(_metric_card(
+                "Routing Confidence", f"{rc:.0%}",
+                f"Route: {route}", score=rc,
+            ), unsafe_allow_html=True)
+        with c6:
+            st.markdown(_metric_card(
+                "Citation Faithfulness", f"{cf:.0%}", score=cf,
+            ), unsafe_allow_html=True)
+        with c7:
+            st.markdown(_metric_card(
+                "Context Utilization", f"{ctx_u:.0f}%",
+                f"Source reliability: {src_r:.0%}",
+            ), unsafe_allow_html=True)
+        with c8:
+            st.markdown(_metric_card(
+                "Completeness", f"{comp:.0f}%",
+                f"Retries: {retries}" + (" (first pass)" if retries <= 1 else ""),
+            ), unsafe_allow_html=True)
+
+        # --- Row 3: Efficiency (single row) ---
+        st.markdown(
+            f'<div class="metric-card">'
+            f'<div class="metric-label">Efficiency</div>'
+            f'<div class="metric-value">'
+            f'{lat / 1000:.2f}s latency &nbsp;&middot;&nbsp; '
+            f'{ptoks} in / {ctoks} out ({ttoks} total) &nbsp;&middot;&nbsp; '
+            f'${cost:.5f}'
+            f'</div>'
+            f'<div class="metric-sub">'
+            f'{" → ".join(f"{k}: {v:.0f}ms" for k, v in timings.items()) if timings else "No node timings"}'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
 
 
 def _render_feedback(msg_idx: int) -> None:
-    """Render thumbs-up / thumbs-down feedback buttons for a chat message.
-
-    Feedback is stored directly on the message dict:
-      ``messages[msg_idx]["feedback_rating"]``  — "up" | "down" | None
-      ``messages[msg_idx]["feedback_comment"]`` — optional free-text string
-
-    Only renders for assistant messages that exist in session state.
-    Clicking a button updates session state and triggers a rerun so the
-    button style and status text update immediately.
-
-    Parameters
-    ----------
-    msg_idx:
-        Index of the assistant message in ``st.session_state.messages``.
-    """
+    """Render compact feedback buttons for an assistant message."""
     msgs = st.session_state.messages
     if msg_idx >= len(msgs) or msgs[msg_idx]["role"] != "assistant":
         return
@@ -372,32 +402,26 @@ def _render_feedback(msg_idx: int) -> None:
     msg    = msgs[msg_idx]
     rating = msg.get("feedback_rating")
 
-    st.markdown("---")
-    st.caption("**Was this answer helpful?**")
-    col_up, col_down, col_status = st.columns([1, 1, 5])
-
+    col_up, col_down, col_status = st.columns([1, 1, 6])
     with col_up:
         up_type = "primary" if rating == "up" else "secondary"
-        if st.button("👍 Yes", key=f"fb_up_{msg_idx}", type=up_type):
+        if st.button("👍", key=f"fb_up_{msg_idx}", type=up_type):
             st.session_state.messages[msg_idx]["feedback_rating"] = "up"
             st.rerun()
-
     with col_down:
         down_type = "primary" if rating == "down" else "secondary"
-        if st.button("👎 No", key=f"fb_down_{msg_idx}", type=down_type):
+        if st.button("👎", key=f"fb_down_{msg_idx}", type=down_type):
             st.session_state.messages[msg_idx]["feedback_rating"] = "down"
             st.rerun()
-
     with col_status:
         if rating == "up":
-            st.success("Marked as helpful ✓", icon="✅")
+            st.caption("Marked helpful")
         elif rating == "down":
-            st.warning("Marked as not helpful", icon="⚠️")
+            st.caption("Marked not helpful")
 
-    # Show optional comment box once rated
     if rating is not None:
         comment = st.text_input(
-            "Add a comment (optional)",
+            "Comment",
             value=msg.get("feedback_comment", ""),
             key=f"fb_comment_{msg_idx}",
             placeholder="What could be improved?",
@@ -413,42 +437,38 @@ def _render_feedback(msg_idx: int) -> None:
 def main() -> None:
     _init_session()
 
-    # Render sidebar first — returns live widget values.
     model, temperature, top_k, max_iterations, answer_word_limit = _render_sidebar()
     current_config = (model, temperature, top_k, max_iterations, answer_word_limit)
 
-    # Load (or retrieve from cache) the agent for the current config.
     try:
         agent, settings, eval_llm = _load_agent(*current_config)
     except Exception as exc:
         st.error(
-            "**Could not load the agent.** Check the points below and restart the app.\n\n"
-            "- Is your `.env` present with `GROQ_API_KEY` and `SERPER_API_KEY`?\n"
+            "**Could not load the agent.** Check below and restart.\n\n"
+            "- Is `.env` present with `GROQ_API_KEY` and `SERPER_API_KEY`?\n"
             "- Has `python scripts/ingest.py` been run?\n\n"
             f"Error: `{exc}`"
         )
         st.stop()
 
-    # Show a banner when the config changes mid-session.
     if st.session_state.active_config is not None and st.session_state.active_config != current_config:
-        st.info("Settings updated — agent rebuilt with the new configuration.")
+        st.toast("Settings updated — agent rebuilt.", icon="🔄")
     st.session_state.active_config = current_config
 
-    # --- Page header ---
-    st.title("Medical Q&A Agent")
+    # --- Header ---
+    st.markdown("## Medical Q&A Agent")
     st.caption(
-        f"Model: `{settings.GROQ_MODEL}` · "
-        f"Temp: `{settings.TEMPERATURE}` · "
-        f"Top-K: `{settings.TOP_K}` · "
-        f"Max iter: `{settings.MAX_ITERATIONS}` · "
-        f"Word limit: `{settings.ANSWER_WORD_LIMIT}`"
+        f"`{settings.GROQ_MODEL}` · "
+        f"temp {settings.TEMPERATURE} · "
+        f"top-k {settings.TOP_K} · "
+        f"retries {settings.MAX_ITERATIONS} · "
+        f"~{settings.ANSWER_WORD_LIMIT} words"
     )
-    st.divider()
 
     # --- Chat ---
     _render_history()
 
-    if query := st.chat_input("Ask a medical question…"):
+    if query := st.chat_input("Ask a question..."):
         query = query.strip()
         if not query:
             st.warning("Please enter a non-empty question.")
@@ -459,7 +479,7 @@ def main() -> None:
             st.markdown(query)
 
         with st.chat_message("assistant"):
-            with st.spinner("Thinking…"):
+            with st.spinner("Thinking..."):
                 try:
                     response, source, full_state, latency_ms = _run_query(agent, query)
                     logger.info("Query answered | source=%s | latency_ms=%.0f", source, latency_ms)
@@ -474,10 +494,10 @@ def main() -> None:
             if source:
                 st.markdown(_source_badge(source), unsafe_allow_html=True)
 
-            # --- Evaluate and render performance metrics ---
+            # --- Evaluate and render metrics ---
             metrics_dict: dict = {}
             if full_state:
-                with st.spinner("Evaluating response quality…"):
+                with st.spinner("Evaluating..."):
                     try:
                         ev = evaluate(
                             llm               = eval_llm,
@@ -494,6 +514,57 @@ def main() -> None:
                             answer_word_limit = settings.ANSWER_WORD_LIMIT,
                         )
                         metrics_dict = dataclasses.asdict(ev)
+                        # --- Log full pipeline summary ---
+                        logger.info(
+                            "=== PIPELINE SUMMARY ===\n"
+                            "  Query:                %s\n"
+                            "  Route:                %s\n"
+                            "  Source:               %s\n"
+                            "  Iterations:           %d\n"
+                            "  First pass success:   %s\n"
+                            "  --- Token Usage ---\n"
+                            "  Prompt tokens:        %d\n"
+                            "  Completion tokens:    %d\n"
+                            "  Total tokens:         %d\n"
+                            "  Estimated cost:       $%.6f\n"
+                            "  --- Latency ---\n"
+                            "  Total latency:        %.1f ms\n"
+                            "  Node timings:         %s\n"
+                            "  --- Quality Scores (LLM-as-judge) ---\n"
+                            "  Goal fulfillment:     %.2f\n"
+                            "  Answer relevance:     %.2f\n"
+                            "  Reasoning:            %.2f\n"
+                            "  Routing confidence:   %.2f\n"
+                            "  Groundedness:         %.2f\n"
+                            "  Citation faithfulness: %.2f\n"
+                            "  Hallucination flag:   %s\n"
+                            "  --- Deterministic Metrics ---\n"
+                            "  Answer completeness:  %.1f%%\n"
+                            "  Context utilization:  %.1f%%\n"
+                            "  Source reliability:   %.2f\n"
+                            "========================",
+                            query,
+                            ev.routing_decision,
+                            source,
+                            ev.retrieval_attempts,
+                            ev.first_pass_success,
+                            ev.prompt_tokens,
+                            ev.completion_tokens,
+                            ev.total_tokens,
+                            ev.estimated_cost_usd,
+                            ev.total_latency_ms,
+                            ev.node_timings,
+                            ev.goal_fulfillment_score,
+                            ev.answer_relevance_score,
+                            ev.reasoning_score,
+                            ev.routing_confidence,
+                            ev.groundedness_score,
+                            ev.citation_faithfulness_score,
+                            ev.hallucination_flag,
+                            ev.answer_completeness_pct,
+                            ev.context_utilization_pct,
+                            ev.source_reliability,
+                        )
                     except Exception as exc:
                         logger.warning("Metrics evaluation failed: %s", exc)
 
@@ -506,10 +577,9 @@ def main() -> None:
             "content":          response,
             "source":           source,
             "metrics":          metrics_dict,
-            "feedback_rating":  None,   # set by _render_feedback
+            "feedback_rating":  None,
             "feedback_comment": "",
         })
-        # Show feedback buttons inline for the just-answered message
         _render_feedback(new_msg_idx)
 
 

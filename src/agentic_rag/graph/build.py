@@ -157,7 +157,7 @@ def build_agent(settings: Settings, checkpointer=None, memory_store=None):
     # --- Relevance checker → augment or retry web_search ---
     def _relevance_routing(state: GraphState) -> str:
         """Read the relevance verdict written by the relevance_checker node."""
-        return state.get("is_relevant", "Yes")
+        return state.get("is_relevant", "No")
 
     workflow.add_conditional_edges(
         _RELEVANCE_CHECKER,

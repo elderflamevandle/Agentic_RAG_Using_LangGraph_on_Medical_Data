@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     # Prompting / answer limits
     # -------------------------------------------------------------------------
     ANSWER_WORD_LIMIT: int = Field(
-        default=80,
+        default=150,
         ge=10,
         le=300,
         description="Soft word-count target injected into the answer prompt",
