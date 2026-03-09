@@ -55,5 +55,5 @@ memory.db-wal
 user_preferences.json
 
 # Claude Code
-.claude
+.claude/
 CLAUDE.md

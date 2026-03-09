@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python:*)",
-      "WebSearch",
-      "WebFetch(domain:console.groq.com)"
-    ]
-  }
-}
