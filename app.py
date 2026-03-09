@@ -95,8 +95,45 @@ st.markdown("""
     }
 
     /* Sidebar styling */
-    [data-testid="stSidebar"] { background-color: #fafbfc; }
-    [data-testid="stSidebar"] .stMarkdown h2 { font-size: 1.1rem; }
+    [data-testid="stSidebar"] { background-color: #f8fafc; }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.4rem; }
+
+    .sidebar-section {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 8px;
+    }
+    .sidebar-section-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #64748b;
+        margin-bottom: 10px;
+    }
+    .sidebar-brand {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 2px;
+    }
+    .sidebar-brand-sub {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        margin-bottom: 12px;
+    }
+    .sidebar-stat {
+        display: inline-block;
+        background: #f1f5f9;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #475569;
+        margin: 2px 3px 2px 0;
+    }
 
     /* Chat input */
     .stChatInput { border-radius: 12px; }
@@ -193,10 +230,19 @@ def _render_sidebar() -> tuple[str, float, int, int, int]:
     defaults = get_settings()
 
     with st.sidebar:
-        st.markdown("## Settings")
-        st.caption("Agent rebuilds automatically on change.")
+        # --- Brand header ---
+        st.markdown(
+            '<div class="sidebar-brand">Medical Q&A Agent</div>'
+            '<div class="sidebar-brand-sub">Agentic RAG Pipeline</div>',
+            unsafe_allow_html=True,
+        )
 
-        # --- Model selection ---
+        # --- Model selection section ---
+        st.markdown(
+            '<div class="sidebar-section">'
+            '<div class="sidebar-section-title">Model</div></div>',
+            unsafe_allow_html=True,
+        )
         default_model_idx = (
             _GROQ_MODELS.index(defaults.GROQ_MODEL)
             if defaults.GROQ_MODEL in _GROQ_MODELS
@@ -206,45 +252,60 @@ def _render_sidebar() -> tuple[str, float, int, int, int]:
             "Model",
             options=_GROQ_MODELS,
             index=default_model_idx,
-            help="Groq-hosted model for routing, relevance checking, and generation.",
+            label_visibility="collapsed",
+            help="Groq-hosted LLM for routing, relevance, and generation.",
         )
 
-        # --- Sliders in two columns ---
-        col1, col2 = st.columns(2)
-        with col1:
-            temperature = st.slider(
-                "Temperature", 0.0, 2.0,
-                value=float(defaults.TEMPERATURE), step=0.1,
-                help="0 = deterministic, higher = creative.",
-            )
-            top_k = st.slider(
-                "Top-K", 1, 20,
-                value=int(defaults.TOP_K), step=1,
-                help="Documents fetched from ChromaDB.",
-            )
-        with col2:
-            max_iterations = st.slider(
-                "Max retries", 1, 10,
-                value=int(defaults.MAX_ITERATIONS), step=1,
-                help="Relevance-check retry limit.",
-            )
-            answer_word_limit = st.slider(
-                "Word limit", 10, 300,
-                value=int(defaults.ANSWER_WORD_LIMIT), step=10,
-                help="Soft word-count target for answers.",
-            )
-
-        st.divider()
-
-        # --- Source legend (compact) ---
-        st.markdown("**Sources**")
-        legend_html = " &nbsp; ".join(
-            _source_badge(label) for label in _SOURCE_COLOURS
+        # --- Generation parameters ---
+        st.markdown(
+            '<div class="sidebar-section">'
+            '<div class="sidebar-section-title">Generation</div></div>',
+            unsafe_allow_html=True,
         )
-        st.markdown(legend_html, unsafe_allow_html=True)
+        temperature = st.slider(
+            "Temperature", 0.0, 2.0,
+            value=float(defaults.TEMPERATURE), step=0.1,
+            help="0 = deterministic, higher = more creative.",
+        )
+        answer_word_limit = st.slider(
+            "Answer word limit", 10, 300,
+            value=int(defaults.ANSWER_WORD_LIMIT), step=10,
+            help="Soft word-count target for generated answers.",
+        )
 
-        st.divider()
+        # --- Retrieval parameters ---
+        st.markdown(
+            '<div class="sidebar-section">'
+            '<div class="sidebar-section-title">Retrieval</div></div>',
+            unsafe_allow_html=True,
+        )
+        top_k = st.slider(
+            "Top-K documents", 1, 20,
+            value=int(defaults.TOP_K), step=1,
+            help="Number of documents fetched from ChromaDB per query.",
+        )
+        max_iterations = st.slider(
+            "Max retries", 1, 10,
+            value=int(defaults.MAX_ITERATIONS), step=1,
+            help="How many times the relevance checker can retry via web search.",
+        )
 
+        # --- Source legend ---
+        st.markdown(
+            '<div class="sidebar-section">'
+            '<div class="sidebar-section-title">Data Sources</div></div>',
+            unsafe_allow_html=True,
+        )
+        for label, colour in _SOURCE_COLOURS.items():
+            st.markdown(
+                f'<span style="display:inline-block;width:10px;height:10px;'
+                f'border-radius:50%;background:{colour};margin-right:6px;"></span>'
+                f'<span style="font-size:0.78rem;color:#334155;">{label}</span>',
+                unsafe_allow_html=True,
+            )
+
+        # --- Actions ---
+        st.markdown("")  # spacer
         if st.button("Clear chat", use_container_width=True, type="secondary"):
             st.session_state.messages = []
             st.rerun()
@@ -256,8 +317,15 @@ def _render_sidebar() -> tuple[str, float, int, int, int]:
         rated = up_count + down_count
         if rated:
             satisfaction = round(up_count / rated * 100)
-            st.divider()
-            st.caption(f"**Feedback:** {up_count} helpful / {down_count} not &middot; {satisfaction}%")
+            st.markdown(
+                f'<div class="sidebar-section">'
+                f'<div class="sidebar-section-title">Session Feedback</div>'
+                f'<span class="sidebar-stat">👍 {up_count}</span>'
+                f'<span class="sidebar-stat">👎 {down_count}</span>'
+                f'<span class="sidebar-stat">{satisfaction}% helpful</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
             st.progress(satisfaction / 100)
 
     return model, temperature, top_k, max_iterations, answer_word_limit
