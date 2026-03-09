@@ -31,3 +31,30 @@ class RelevanceDecision(BaseModel):
         ...,
         description="Whether the provided context adequately addresses the user query.",
     )
+
+
+class RewriteDecision(BaseModel):
+    """Structured output schema for the query-rewriter node.
+
+    ``needs_rewrite`` lets the LLM explicitly signal that the query is
+    already standalone, avoiding silent echo-returns that are
+    indistinguishable from a genuine no-op.
+    """
+
+    needs_rewrite: bool = Field(
+        ...,
+        description=(
+            "True when the query contains pronouns or implicit references "
+            "(its, they, it, the disease, the device, this condition) that "
+            "require prior context to resolve. False when the query is "
+            "already fully self-contained."
+        ),
+    )
+    rewritten_query: str = Field(
+        default="",
+        description=(
+            "A self-contained restatement of the query with all pronouns and "
+            "implicit references replaced by their referents. "
+            "Empty string when needs_rewrite is False."
+        ),
+    )

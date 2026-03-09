@@ -36,6 +36,7 @@ ENV/
 *.swo
 
 # Logs and local runtime files
+logs/
 *.log
 *.pid
 
@@ -47,5 +48,12 @@ Thumbs.db
 chroma_db/
 chroma_db_new/
 
+# Runtime memory / state (regenerated at runtime)
+memory.db
+memory.db-shm
+memory.db-wal
+user_preferences.json
+
 # Claude Code
+.claude/
 CLAUDE.md

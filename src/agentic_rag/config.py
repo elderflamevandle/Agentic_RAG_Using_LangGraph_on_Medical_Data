@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     # Prompting / answer limits
     # -------------------------------------------------------------------------
     ANSWER_WORD_LIMIT: int = Field(
-        default=80,
+        default=150,
         ge=10,
         le=300,
         description="Soft word-count target injected into the answer prompt",
@@ -102,6 +102,36 @@ class Settings(BaseSettings):
         default=0,
         ge=0,
         description="Rows to sample per dataset for testing (0 = use all rows)",
+    )
+
+    # -------------------------------------------------------------------------
+    # Memory (short-term checkpointer + long-term ChromaDB store)
+    # -------------------------------------------------------------------------
+    MEMORY_BACKEND: str = Field(
+        default="sqlite",
+        description="Checkpointer backend: 'sqlite' (dev/Docker) or 'postgres' (production EKS)",
+    )
+    MEMORY_SQLITE_PATH: str = Field(
+        default="./memory.db",
+        description="SQLite file path for SqliteSaver — must be on a persistent volume in Docker/K8s",
+    )
+    DATABASE_URL: str = Field(
+        default="",
+        description="Postgres connection string — required only when MEMORY_BACKEND=postgres",
+    )
+    MEMORY_COLLECTION: str = Field(
+        default="agent_memories",
+        description="ChromaDB collection name for long-term episodic memory",
+    )
+    MEMORY_TOP_K: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Number of past interactions to retrieve from memory per query",
+    )
+    MEMORY_PREFS_PATH: str = Field(
+        default="./user_preferences.json",
+        description="Path to JSON file storing user preferences — must be on a persistent volume",
     )
 
     # -------------------------------------------------------------------------

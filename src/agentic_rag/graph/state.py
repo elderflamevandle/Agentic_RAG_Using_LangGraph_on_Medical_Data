@@ -49,7 +49,19 @@ class GraphState(_RequiredState, total=False):
     iteration_count: int
     prompt: str
     response: str
-    # Performance tracking — populated by the timing wrapper and generate node.
-    node_timings: dict        # {node_name: latency_ms}  written by build.py _timed()
-    prompt_tokens: int        # input  token count from Groq usage_metadata
-    completion_tokens: int    # output token count from Groq usage_metadata
+    # Performance tracking
+    node_timings: dict
+    prompt_tokens: int
+    completion_tokens: int
+    # Memory
+    thread_id: str        # session ID passed in from app.py; used by save_memory node
+    memory_context: str   # retrieved past Q&As injected into the augment prompt
+    # Conversation history — list of {"role": "user"|"assistant", "content": str}
+    # populated by app.py from st.session_state.messages so follow-up questions
+    # ("What are its treatments?") resolve correctly against prior turns.
+    conversation_history: list
+    # Coreference-resolved form of query produced by query_rewriter_node.
+    # Absent when the query is already standalone or there is no history.
+    # All retrieval nodes use: state.get("rewritten_query") or state["query"]
+    # build_prompt_node and save_memory_node always use the original query.
+    rewritten_query: str

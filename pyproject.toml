@@ -1,0 +1,83 @@
+[tool.poetry]
+name = "agentic-rag"
+version = "0.1.0"
+description = "Medical Q&A agentic RAG pipeline using LangGraph, ChromaDB, Groq LLM, and Serper search."
+authors = ["Chaitanya"]
+readme = "README.md"
+packages = [{ include = "agentic_rag", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+
+# Core data processing
+pandas = "2.2.3"
+
+# Environment & configuration
+python-dotenv = "1.0.1"
+pydantic = "2.10.6"
+pydantic-settings = "2.7.1"
+
+# LLM & orchestration
+langchain-groq = "0.2.3"
+langchain-community = "0.3.20"
+langchain-core = "0.3.45"
+langgraph = "0.3.5"
+langgraph-checkpoint-sqlite = ">=2.0.0"
+
+# Vector store
+chromadb = "0.6.3"
+
+# Web UI
+streamlit = ">=1.40.0"
+
+
+[tool.poetry.group.prod.dependencies]
+# Required only when MEMORY_BACKEND=postgres (EKS / cloud deployment)
+psycopg2-binary = ">=2.9"
+langgraph-checkpoint-postgres = ">=2.0.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+pytest-asyncio = ">=0.23"
+ruff = ">=0.4"
+mypy = ">=1.10"
+
+
+[tool.poetry.scripts]
+ingest  = "scripts.ingest:main"
+run-agent = "scripts.run_agent:main"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+
+# ---------------------------------------------------------------------------
+# Ruff (linter)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+
+# ---------------------------------------------------------------------------
+# Mypy (type checker)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = false
+
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

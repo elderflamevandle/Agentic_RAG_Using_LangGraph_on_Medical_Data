@@ -35,10 +35,12 @@ from ..vectorstore.chroma_store import ChromaStore
 from .nodes import (
     build_prompt_node,
     generate_node,
+    query_rewriter_node,
     relevance_checker_node,
     retrieve_device_node,
     retrieve_qna_node,
     router_node,
+    save_memory_node,
     web_search_node,
 )
 from .state import GraphState
@@ -77,16 +79,18 @@ def _timed(name: str, fn):
 
 
 # Node name constants — single source of truth referenced by add_node and edges.
+_QUERY_REWRITER = "query_rewriter"
 _ROUTER = "router"
 _RETRIEVE_QNA = "retrieve_qna"
 _RETRIEVE_DEVICE = "retrieve_device"
 _WEB_SEARCH = "web_search"
 _RELEVANCE_CHECKER = "relevance_checker"
-_AUGMENT = "augment"
-_GENERATE = "generate"
+_AUGMENT      = "augment"
+_GENERATE     = "generate"
+_SAVE_MEMORY  = "save_memory"
 
 
-def build_agent(settings: Settings):
+def build_agent(settings: Settings, checkpointer=None, memory_store=None):
     """Build and compile the agentic RAG LangGraph workflow.
 
     Steps
@@ -117,16 +121,19 @@ def build_agent(settings: Settings):
     # --- Graph construction ---
     workflow = StateGraph(GraphState)
 
+    workflow.add_node(_QUERY_REWRITER,   _timed(_QUERY_REWRITER,   query_rewriter_node(llm)))
     workflow.add_node(_ROUTER,           _timed(_ROUTER,           router_node(llm)))
     workflow.add_node(_RETRIEVE_QNA,     _timed(_RETRIEVE_QNA,     retrieve_qna_node(collections, settings)))
     workflow.add_node(_RETRIEVE_DEVICE,  _timed(_RETRIEVE_DEVICE,  retrieve_device_node(collections, settings)))
     workflow.add_node(_WEB_SEARCH,       _timed(_WEB_SEARCH,       web_search_node(search_tool)))
     workflow.add_node(_RELEVANCE_CHECKER,_timed(_RELEVANCE_CHECKER,relevance_checker_node(llm, settings)))
-    workflow.add_node(_AUGMENT,          _timed(_AUGMENT,          build_prompt_node(settings)))
+    workflow.add_node(_AUGMENT,          _timed(_AUGMENT,          build_prompt_node(settings, memory_store)))
     workflow.add_node(_GENERATE,         _timed(_GENERATE,         generate_node(llm)))
+    workflow.add_node(_SAVE_MEMORY,      save_memory_node(memory_store))
 
     # --- Entry edge ---
-    workflow.add_edge(START, _ROUTER)
+    workflow.add_edge(START, _QUERY_REWRITER)
+    workflow.add_edge(_QUERY_REWRITER, _ROUTER)
 
     # --- Router → retriever (conditional on state["route"]) ---
     def _pick_retriever(state: GraphState) -> str:
@@ -150,7 +157,7 @@ def build_agent(settings: Settings):
     # --- Relevance checker → augment or retry web_search ---
     def _relevance_routing(state: GraphState) -> str:
         """Read the relevance verdict written by the relevance_checker node."""
-        return state.get("is_relevant", "Yes")
+        return state.get("is_relevant", "No")
 
     workflow.add_conditional_edges(
         _RELEVANCE_CHECKER,
@@ -163,8 +170,10 @@ def build_agent(settings: Settings):
 
     # --- Linear tail of the pipeline ---
     workflow.add_edge(_AUGMENT, _GENERATE)
-    workflow.add_edge(_GENERATE, END)
+    workflow.add_edge(_GENERATE, _SAVE_MEMORY)
+    workflow.add_edge(_SAVE_MEMORY, END)
 
-    compiled = workflow.compile()
-    logger.info("Agent graph compiled successfully.")
+    compiled = workflow.compile(checkpointer=checkpointer)
+    logger.info("Agent graph compiled successfully | memory=%s | checkpointer=%s",
+                bool(memory_store), type(checkpointer).__name__ if checkpointer else "none")
     return compiled
